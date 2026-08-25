@@ -1,0 +1,47 @@
+# SEMLock path ownership. CI enforces this (see .github/workflows/ and ownership_guard.py).
+# A session may only modify paths in its row (or paths marked owner: common).
+# Schema of one row: session, branch_prefix, paths.
+rows:
+  - session: S1
+    branch_prefix: "session/1-"
+    paths:
+      - "semlock/ir/"
+      - "semlock/extractors/base.py"
+      - "semlock/extractors/registry.py"
+      - "schema/"
+      - "docs/"
+      - "mocks/"
+      - ".github/"
+      - "CODEOWNERS"
+      - "pyproject.toml"
+      - "README.md"
+  - session: S2
+    branch_prefix: "session/2-"
+    paths:
+      - "semlock/extractors/python/"
+      - "semlock/extractors/typescript/"
+  - session: S3
+    branch_prefix: "session/3-"
+    paths:
+      - "semlock/resolution/"
+  - session: S4
+    branch_prefix: "session/4-"
+    paths:
+      - "semlock/graph/"
+      - "semlock/engine/"
+  - session: S5
+    branch_prefix: "session/5-"
+    paths:
+      - "semlock/git/"
+      - "semlock/cli/"
+      - "semlock/output/"
+      - "semlock/config/"
+      - "semlock/cache/"
+  - session: S6
+    branch_prefix: "session/6-"
+    paths:
+      - "bench/"
+      - "corpus/"
+common:
+  # Anyone may add tests for their own subsystem; nobody edits another's implementation.
+  - "tests/"

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://semlock.local/schema/ir.schema.json",
+  "title": "SEMLock FileFacts IR",
+  "description": "Wire format for one file's facts on one branch ref. Property order here defines canonical JSON key order (INV-5). See docs/IR_CONTRACT.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version", "path", "language", "ref", "symbols", "refs"],
+  "properties": {
+    "format_version": { "const": "0.1.0" },
+    "path": { "type": "string", "pattern": "^[^\\\\]+$", "description": "repo-relative, forward slashes only" },
+    "language": { "enum": ["python", "typescript"] },
+    "ref": { "type": "string", "minLength": 1 },
+    "symbols": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/symbol" }
+    },
+    "refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ref" }
+    }
+  },
+  "$defs": {
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_line", "start_col", "end_line", "end_col"],
+      "properties": {
+        "start_line": { "type": "integer", "minimum": 1 },
+        "start_col": { "type": "integer", "minimum": 0 },
+        "end_line": { "type": "integer", "minimum": 1 },
+        "end_col": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "param": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "position", "kind", "type_annotation", "has_default"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "position": { "type": "integer", "minimum": 0 },
+        "kind": { "enum": ["positional", "keyword_only", "varargs", "kwargs"] },
+        "type_annotation": { "type": ["string", "null"] },
+        "has_default": { "type": "boolean" }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["params", "return_type"],
+      "properties": {
+        "params": { "type": "array", "items": { "$ref": "#/$defs/param" } },
+        "return_type": { "type": ["string", "null"] }
+      }
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type_annotation", "span"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "type_annotation": { "type": ["string", "null"] },
+        "span": { "$ref": "#/$defs/span" }
+      }
+    },
+    "symbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "kind", "span", "exports", "bases", "signature", "members"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "dotted qualified name, e.g. pkg.models.User.greet" },
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["function", "method", "class", "interface", "type_alias", "variable"] },
+        "span": { "$ref": "#/$defs/span" },
+        "exports": { "type": "boolean" },
+        "bases": { "type": "array", "items": { "type": "string" } },
+        "signature": { "oneOf": [{ "$ref": "#/$defs/signature" }, { "type": "null" }] },
+        "members": { "type": "array", "items": { "$ref": "#/$defs/member" } }
+      }
+    },
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "target_id"],
+      "properties": {
+        "status": { "enum": ["unresolved", "resolved", "external", "ambiguous"] },
+        "target_id": { "type": ["string", "null"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "resolved" } } },
+          "then": { "properties": { "target_id": { "type": "string", "minLength": 1 } }, "required": ["status", "target_id"] }
+        },
+        {
+          "if": { "properties": { "status": { "enum": ["unresolved", "external", "ambiguous"] } } },
+          "then": { "properties": { "target_id": { "type": "null" } } }
+        }
+      ]
+    },
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "span", "resolution"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["call", "read", "write", "import", "attribute"] },
+        "span": { "$ref": "#/$defs/span" },
+        "resolution": { "$ref": "#/$defs/resolution" }
+      }
+    }
+  }
+}
