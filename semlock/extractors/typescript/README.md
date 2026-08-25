@@ -1,16 +1,16 @@
-# TypeScript Extractor + Resolver — Spike Report (S3, Day 1)
+# TypeScript Extractor + Resolver (S3)
 
-Status: SPIKE QUALITY, deliberately unpolished pending the 0.2.0 IR freeze.
-Consumes S1's provisional IR (FORMAT_VERSION 0.1.0) verbatim. Implements the
-same `Extractor` / `Resolver` ABCs as every other language package
-(`semlock/extractors/base.py`) so the engine consumes both identically.
+Status: Day-2 — wired to the FROZEN IR 0.2.0 (`Ref.module_specifier` /
+`Ref.imported_name`, ratified `module_path::qualified_name` id grammar,
+ADR-0008). Implements the same `Extractor` / `Resolver` ABCs as every other
+language package so the engine consumes both identically.
 
 ## Layout
 
 | File | Role |
 |---|---|
-| `extractor.py` | tree-sitter walk -> UNRESOLVED `FileFacts`; fixed id grammar |
-| `resolver.py` | ref-wide binding -> fills `Resolution`; coverage metric |
+| `extractor.py` | tree-sitter walk -> UNRESOLVED `FileFacts`; fixed id grammar; import/re-export evidence |
+| `resolver.py` | specifier-directed binding -> fills `Resolution`; coverage metric |
 | `_paths.py` | module-path canonicalization (ext strip, index collapse) |
 | `queries/typescript.scm` | declarative spec mirror; compile-checked in CI |
 
@@ -59,84 +59,104 @@ delta — recommended, cheap, honest).
 
 Reliably produced per kind:
 - `call`: bare-callee calls, `new` ctors, method calls through members;
-- `import`: one ref per bound local name (+ original-name companion ref when
-  the import is aliased — dual-ref convention, documented in tests);
+- `import`: one ref per bound local name. 0.2.0 evidence on every import ref:
+  `module_specifier` (source AS WRITTEN), `imported_name` = the ORIGINAL
+  exported name for aliased imports, `"default"` for default imports (ES
+  literally exports defaults under that name). Namespace imports use the
+  contract-sanctioned producer encoding `name="<local>.*"`. Barrel files emit
+  their re-export edges as import refs (`export {X} from "m"` ->
+  `imported_name=X`; `export * from "m"` -> `name="*"`).
 - `attribute`: property reads; `write`: assignment-target properties;
 - `read`: type identifiers in annotations/heritage/generics, plus
   extends/implements heads (JS globals + lowercase primitives filtered out).
-Nothing needs dropping. Needed ADDITIONS to make imports/aliases/resolvers
-static: `Ref.module_specifier`, `Ref.imported_name` (see issue #3).
+Nothing needs dropping; receiver-type evidence remains a known gap.
 
 ### Q5 resolution
 
 Evidence rules (ref-wide over one changeset side):
-- `resolved`: exactly ONE distinct candidate symbol id matches under the kind's
-  candidate set — imports bind against exported top-level names, calls against
-  top-level + member names, reads against top-level names, attribute/write
-  against member names (direct join to member ids);
-- `ambiguous`: >= 2 distinct candidates (e.g. structural typing makes
-  `Shape.area` vs `Square.area` genuinely ambiguous — marked, never guessed);
-- `external`: well-known JS/TS globals (filtered mostly at extraction);
-- `unresolved`: zero candidates, aliased/default imports whose local name
-  differs from the original, member calls whose receiver type is lost.
-Ambiguity is made rare by specifier-directed lookup + receiver evidence —
-i.e., by issue #3's fields, not by heuristics.
+- imports are SPECIFIER-DIRECTED: specifier -> module of this side (relative
+  anchored on the importing file's directory, exact match, then tsconfig-style
+  aliases — explicit `TypeScriptResolver(path_aliases={"@/*": "src/*"})`, or
+  the built-in `@/` -> `src/` convention applied ONLY when the mapped module
+  exists on the side); binding follows named re-export chains and `export *`
+  sources transitively to the ORIGINAL symbol id (INV-7 chain);
+- calls/reads consult their own file's resolved import bindings first (static
+  scoping), then unique-name candidates;
+- attribute/write bind to member symbols by direct id join;
+- `resolved`: exactly ONE distinct candidate id under those rules;
+  `ambiguous`: >= 2 (e.g. structural typing makes `Shape.area` vs
+  `Square.area` genuinely ambiguous — marked, never guessed);
+- `external`: bare specifiers (node_modules/builtins) and in-repo modules
+  absent from this side (identical across branches by definition, so nothing
+  is lost);
+- namespace/star edges resolve MODULE-granular (`target_id` = bare
+  `module_path`, ADR-0008 §3).
 
 ## Measured resolution coverage (fixtures committed under tests/fixtures/)
 
-Raw counts over all 11 fixture sides (base sides are healthy code; head sides
-of conflict scenarios contain the intentional break, which legitimately lowers
-their numbers):
+Re-measured AFTER wiring 0.2.0 specifier-directed binding (Day 2):
 
-| Side | Refs | Resolved | Coverage |
-|---|---|---|---|
-| clean_pair/base | 2 | 2 | 100% |
-| clean_pair/head | 7 | 3 | 43% |
-| signature_changed/base | 4 | 4 | 100% |
-| signature_changed/head | 4 | 4 | 100% |
-| removed_export/base | 5 | 5 | 100% |
-| removed_export/head | 5 | 3 | 60% |
-| field_removed/base | 6 | 5 | 83% |
-| field_removed/head | 6 | 2 | 33% |
-| return_changed/base | 5 | 5 | 100% |
-| return_changed/head | 5 | 5 | 100% |
-| resolution_matrix/base (barrels, statics, generics, ns-import) | 17 | 12 | 71% |
-| **Healthy base sides aggregate** | **39** | **33** | **84.6%** |
+| Side | Refs | Resolved | Coverage | vs Day 1 |
+|---|---|---|---|---|
+| clean_pair/base | 2 | 2 | 100% | = |
+| clean_pair/head | 7 | 5 | 71% | 43% -> 71% |
+| signature_changed/base | 4 | 4 | 100% | = |
+| signature_changed/head | 4 | 4 | 100% | = |
+| removed_export/base | 7 | 7 | 100% | = |
+| removed_export/head | 6 | 4 | 67% | 60% -> 67% |
+| field_removed/base | 6 | 5 | 83% | = |
+| field_removed/head | 6 | 2 | 33% | = |
+| return_changed/base | 5 | 5 | 100% | = |
+| return_changed/head | 5 | 5 | 100% | = |
+| resolution_matrix/base (barrels, statics, generics, ns-import) | 19 | 15 | 79% | 71% -> 79% |
+| **Healthy base sides aggregate** | **43** | **38** | **88.4%** | **84.6% -> 88.4%** |
 
-Post-break drops are BY DESIGN: e.g. after `email` is removed from `Account`,
-the consumer's `account.email` edges become explicitly unresolved instead of
-silently matching something else (INV-2 working as intended).
+Denominators grew honestly: barrel re-export/star edges are now first-class
+refs and every import ref carries its module_specifier. The remaining gaps:
 
-Known loss buckets visible above: builtin instance methods (`toUpperCase`,
-`reduce`), aliased named imports, structurally-typed member calls (marked
-ambiguous), namespace-import inner bindings.
+- builtin instance methods (`reduce`, `toUpperCase`) — unresolved by design
+  (stdlib surface is not a SEMLock dependency edge candidate);
+- structurally-typed member calls (`s.area()` on a `Shape` param) stay
+  `ambiguous` when several owners declare the member — receiver-type evidence
+  is not part of 0.2.0;
+- post-break drops remain BY DESIGN: after `email` leaves `Account`, the
+  consumer's `account.email` edges become explicitly unresolved instead of
+  silently matching something else (INV-2 working as intended).
 
-## Honesty-gate verdict
+## Honesty-gate verdict (revised Day 2)
 
-TS resolution via unique-name matching — WITHOUT specifier/receiver evidence in
-the IR — is materially weaker than specifier-directed resolution. It is still
-useful (84.6% on healthy small fixtures, precision-safe because
-unresolved/ambiguous can never produce findings under INV-2), but expect this
-number to FALL on large real trees where duplicate export names accumulate.
-Per the honesty gate we do NOT claim Python-parity for TypeScript until issue
-#3's fields land in 0.2.0. Recommendation to S1: fold
-`Ref.module_specifier` + `Ref.imported_name` (+ ideally receiver evidence)
-into the single Day-2 revision; otherwise scope TypeScript as experimental for
-v1 with coverage reported beside every benchmark run.
+With 0.2.0's specifier + imported_name fields, TS binding is no longer fuzzy
+name-matching: aliased/default/namespace imports, barrel chains, and star-only
+members all bind deterministically to original ids. Healthy-side coverage rose
+84.6% -> **88.4%**, and the residual ambiguity is concentrated exactly where
+the IR legitimately lacks evidence (receiver types, stdlib instance methods).
+Remaining ceiling for v1: receiver-typed member calls. If S1 ever wants >90%
+on annotation-heavy real trees, the follow-up request would be an optional
+`Ref.receiver_symbol_id` (post-freeze: ADR required). TypeScript stays
+full-scope; no experimental downgrade needed.
 
 ## Limits (explicit, none hidden)
 
 - No type inference anywhere; annotation-driven evidence only.
-- Aliased (`import {a as b}`) and default imports bind only if the local name
-  equals the original exported name; anonymous default exports are unbindable.
-- Barrel `export * from` chains are followed only implicitly via name matching;
-  renamed re-export aliases are lost (no IR channel).
-- tsconfig path aliases (`@/x`) are recognized syntactically (`_paths.py`) but
-  cannot be applied until specifiers ride the IR.
-- node_modules / ambient modules surface as `unresolved` (never misclassified
-  as local ids); proper `external` classification needs specifiers.
+- Receiver-typed member calls (`u.greet()` where `u: User`) cannot use the
+  annotation — `Ref` carries no receiver evidence in 0.2.0. Such refs bind
+  only when the member name is unique on the side, else `ambiguous`.
+- Default imports bind only when the target module's export surface is
+  unambiguous (exactly one exported top-level symbol) — 0.2.0 has no
+  default-export flag on `Symbol`; multi-export modules stay unresolved.
+- Namespace-import member access (`fs.readFile`) is not linked to the
+  namespace binding (no receiver field); the namespace ref itself binds at
+  module granularity.
+- A call of a locally-shadowed import name (local `const greet` shadowing an
+  imported `greet` inside a function body) would follow the import binding;
+  top-level shadowing is impossible in TS, function-local shadowing is a rare,
+  documented conservative risk.
+- tsconfig `paths` are honored through the explicit `path_aliases` constructor
+  parameter (S5 config can wire the real tsconfig later); without it, only the
+  built-in, existence-checked `@/` -> `src/` convention applies.
 - Destructured object parameters, computed member access (`obj[key]`),
-  decorators, and JSX-specific surfaces are out of spike scope.
+  decorators, and JSX-specific surfaces remain out of scope.
+- Side-effect-only imports (`import "./polyfill"`) are not emitted.
 
 ## Consumable now
 
@@ -147,5 +167,6 @@ from semlock.extractors.typescript import (
     measure_resolution,   # Constitution §4 coverage metric
 )
 facts = TypeScriptExtractor().extract_file("src/x/y.ts", "main", source)
-resolved = TypeScriptResolver().resolve((facts,))
+resolver = TypeScriptResolver(path_aliases={"@/*": "src/*"})  # optional
+resolved = resolver.resolve((facts,))
 ```

@@ -151,24 +151,79 @@ class TypeScriptExtractor(Extractor):
     def _visit_export(self, node: Node, ctx: _FileContext) -> None:
         clause = None
         target = None
+        source_text: str | None = None
+        star = False
         for child in node.children:
-            if child.type in ("export", "default", "=", "string", ",", ";"):
+            kind = child.type
+            if kind in ("export", "default", "=", ",", ";"):
                 continue
-            if child.type == "export_clause":
+            if kind == "export_clause":
                 clause = child
-                break
-            if child.type in ("from", "star", "*") or (
-                child.is_named and _text(child) == "from"
-            ):
+                continue
+            if kind == "string":
+                source_text = self._specifier_of_string(child)
+                continue
+            if kind == "from" or _text(child) == "from":
+                continue
+            if _text(child) == "*":
+                star = True
                 continue
             if target is None:
                 target = child
+        if source_text is not None:
+            self._emit_reexport_edges(
+                node, ctx, clause=clause, star=star, source=source_text
+            )
+            return
         if clause is not None:
             ctx.pending_exports.extend(self._specifier_names(clause))
             return
-        if target is None or target.type in ("star", "*"):
+        if target is None:
             return
         self._visit_statement(target, ctx, exported=True)
+
+    def _emit_reexport_edges(
+        self,
+        node: Node,
+        ctx: _FileContext,
+        clause: Node | None,
+        star: bool,
+        source: str,
+    ) -> None:
+        """Barrel evidence: `export {X as Y} from "m"` / `export * from "m"`."""
+        span = _span(node)
+        if star:
+            ctx.refs.append(
+                Ref(name="*", kind="import", span=span, module_specifier=source)
+            )
+            return
+        if clause is None:
+            return
+        for specifier in _children(clause, "export_specifier"):
+            identifiers = [
+                _text(c) for c in specifier.children if c.type == "identifier"
+            ]
+            if not identifiers:
+                continue
+            original = identifiers[0]
+            facing = identifiers[-1]
+            ctx.refs.append(
+                Ref(
+                    name=facing,
+                    kind="import",
+                    span=_span(specifier),
+                    module_specifier=source,
+                    # ES semantics: the name as exported by the SOURCE module.
+                    # Always set so the resolver can tell re-export edges from
+                    # ordinary imports (which leave it None unless aliased).
+                    imported_name=original,
+                )
+            )
+
+    @staticmethod
+    def _specifier_of_string(string_node: Node) -> str | None:
+        fragment = _child(string_node, "string_fragment")
+        return _text(fragment) if fragment is not None else None
 
     @staticmethod
     def _specifier_names(clause: Node) -> list[str]:
@@ -185,28 +240,49 @@ class TypeScriptExtractor(Extractor):
     # --------------------------------------------------------------- imports
 
     def _visit_import(self, node: Node, ctx: _FileContext) -> None:
+        specifier = self._statement_specifier(node)
         clause = _child(node, "import_clause")
-        if clause is None:
+        if clause is None or specifier is None:
             return
         for child in clause.children:
             if child.type == "identifier":
                 ctx.refs.append(
-                    Ref(name=_text(child), kind="import", span=_span(child))
+                    Ref(
+                        name=_text(child),
+                        kind="import",
+                        span=_span(child),
+                        module_specifier=specifier,
+                        imported_name="default",
+                    )
                 )
             elif child.type == "namespace_import":
-                name = _text(child).split()[-1]
-                ctx.refs.append(Ref(name=name, kind="import", span=_span(child)))
-            elif child.type == "named_imports":
-                for specifier in _children(child, "import_specifier"):
-                    original, alias = self._import_specifier_pair(specifier)
-                    local = alias or original
-                    ctx.refs.append(
-                        Ref(name=local, kind="import", span=_span(specifier))
+                local = _text(child).split()[-1]
+                ctx.refs.append(
+                    Ref(
+                        name=f"{local}.*",
+                        kind="import",
+                        span=_span(child),
+                        module_specifier=specifier,
                     )
-                    if alias and alias != original:
-                        ctx.refs.append(
-                            Ref(name=original, kind="import", span=_span(specifier))
+                )
+            elif child.type == "named_imports":
+                for spec in _children(child, "import_specifier"):
+                    original, alias = self._import_specifier_pair(spec)
+                    ctx.refs.append(
+                        Ref(
+                            name=alias or original,
+                            kind="import",
+                            span=_span(spec),
+                            module_specifier=specifier,
+                            imported_name=original if alias else None,
                         )
+                    )
+
+    def _statement_specifier(self, node: Node) -> str | None:
+        string_node = _child(node, "string")
+        if string_node is None:
+            return None
+        return self._specifier_of_string(string_node)
 
     @staticmethod
     def _import_specifier_pair(specifier: Node) -> tuple[str, str]:

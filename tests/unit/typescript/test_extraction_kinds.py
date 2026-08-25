@@ -120,11 +120,16 @@ def test_non_exported_let_not_a_symbol_but_counter_is(facts: FileFacts) -> None:
     assert table["src/things::counter"] == "variable"
 
 
-def test_import_refs_emitted_per_bound_name_unresolved(facts: FileFacts) -> None:
-    imports = [r for r in facts.refs if r.kind == "import"]
-    names = sorted(r.name for r in imports)
-    assert names == ["Cfg", "a", "b", "c", "defaultName", "ns"]
-    assert all(r.resolution.status == "unresolved" for r in imports)
+def test_import_refs_carry_specifier_evidence_unresolved(facts: FileFacts) -> None:
+    imports = {r.name: r for r in facts.refs if r.kind == "import"}
+    assert sorted(imports) == ["Cfg", "b", "c", "defaultName", "ns.*"]
+    assert all(r.resolution.status == "unresolved" for r in imports.values())
+    specifiers = {r.module_specifier for r in imports.values()}
+    assert specifiers == {"./other", "lib", "./cfg"}
+    assert imports["b"].imported_name == "a"
+    assert imports["c"].imported_name is None
+    assert imports["defaultName"].imported_name == "default"
+    assert imports["Cfg"].module_specifier == "./cfg"
 
 
 def test_every_ref_starts_unresolved_seam_contract() -> None:

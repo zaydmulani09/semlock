@@ -75,7 +75,7 @@ def test_unresolved_is_explicit_never_faked() -> None:
     assert all(r.resolution.target_id is None for r in resolved.refs)
 
 
-def test_ambiguous_when_two_modules_export_same_name() -> None:
+def test_specified_import_binds_even_when_name_collides_across_modules() -> None:
     left = 'export function helper(): number { return 1; }\n'
     right = 'export function helper(): string { return ""; }\n'
     consumer = (
@@ -83,7 +83,7 @@ def test_ambiguous_when_two_modules_export_same_name() -> None:
         "export const useIt = () => helper();\n"
     )
     files = [
-        EX.extract_file("src/a/left.ts", "main", left),
+        EX.extract_file("src/c/left.ts", "main", left),
         EX.extract_file("src/b/right.ts", "main", right),
         EX.extract_file("src/c/consumer.ts", "main", consumer),
     ]
@@ -92,9 +92,12 @@ def test_ambiguous_when_two_modules_export_same_name() -> None:
     ]
     call = next(r for r in resolved_consumer.refs if r.kind == "call")
     imp = next(r for r in resolved_consumer.refs if r.kind == "import")
-    assert call.resolution.status == "ambiguous"
-    assert imp.resolution.status == "ambiguous"
-    assert call.resolution.target_id is None
+    assert imp.resolution.status == "resolved"
+    assert imp.resolution.target_id == "src/c/left::helper"
+    # The call refers to THIS FILE's import binding -- unambiguous even with
+    # a same-name export elsewhere on the side.
+    assert call.resolution.status == "resolved"
+    assert call.resolution.target_id == "src/c/left::helper"
 
 
 def test_same_module_non_exported_call_resolves() -> None:

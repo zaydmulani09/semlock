@@ -1,10 +1,10 @@
 """Module-path computation for TypeScript symbol ids (S3-owned).
 
-Canonical grammar (briefing, fixed): ``<module_path>::<Qualified.Name>`` where
-``module_path`` is the repo-relative path with the extension stripped and
-``index.ts`` collapsed to its directory. Path aliases are resolved BEFORE this
-computation runs on import specifiers (resolver side); a file's own module path
-never involves aliases.
+Canonical grammar (ADR-0008, ratified at IR 0.2.0): ``<module_path>::<Qualified.Name>``
+where ``module_path`` is the repo-relative path with the extension stripped and
+``index.ts`` collapsed to its directory. Import specifiers are resolved to
+module paths by the RESOLVER (relative anchors on the importing FILE's
+directory; tsconfig-style aliases via ``TypeScriptResolver(path_aliases=...)``).
 """
 from __future__ import annotations
 
@@ -29,36 +29,6 @@ def module_path_of(path: str) -> str:
     return normalized
 
 
-def resolve_relative(specifier: str, from_module_path: str) -> str | None:
-    """Resolve `./x`, `../x`, `../../x` against the importing file's module path.
-
-    Returns None when the specifier is not relative.
-    """
-    if not specifier.startswith("."):
-        return None
-    base_parts = from_module_path.split("/")[:-1] if "/" in from_module_path else []
-    if not base_parts and from_module_path:
-        base_parts = []
-    parts = list(base_parts)
-    segment = specifier
-    while segment.startswith("./") or segment == ".":
-        segment = segment[2:] if segment.startswith("./") else ""
-    while True:
-        if segment.startswith("../"):
-            if parts:
-                parts.pop()
-            segment = segment[3:]
-        elif segment.startswith("./"):
-            segment = segment[2:]
-        else:
-            break
-    for piece in segment.split("/"):
-        if piece and piece != ".":
-            parts.append(piece)
-    target = "/".join(parts) if parts else segment
-    return strip_extension_and_collapse(target)
-
-
 def strip_extension_and_collapse(module_like: str) -> str:
     for ext in sorted(TS_EXTENSIONS, key=len, reverse=True):
         if module_like.endswith(ext):
@@ -72,8 +42,3 @@ def strip_extension_and_collapse(module_like: str) -> str:
 
 def is_relative(specifier: str) -> bool:
     return specifier.startswith(".")
-
-
-def looks_aliased(specifier: str) -> bool:
-    """True for non-relative, non-node_modules bare specifiers (`@/lib/helper`)."""
-    return not is_relative(specifier) and not specifier.startswith("@types/")

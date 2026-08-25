@@ -138,3 +138,14 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
   #2 tree-sitter deps for pyproject, #3 Ref.module_specifier/imported_name
   for the single 0.2.0 revision. docs/ is S1-owned — this line appended under
   rule 17; S1 please ratify at merge.
+- 2026-08-25 S3 (session/3-typescript): REBASED on IR 0.2.0 freeze; resolver
+  wired to Ref.module_specifier/imported_name — specifier-directed binding,
+  barrel chains followed to ORIGINAL ids (INV-7), star-only members,
+  module-granular namespace/star targets (ADR-0008 §3), aliased + default
+  imports bind, calls resolve via their file's import bindings, externals
+  classified (node_modules / out-of-side). TS coverage RE-MEASURED:
+  healthy-side aggregate 33/39 = 84.6% -> 38/43 = 88.4% (grand all sides
+  58/71 = 81.7%); residuals are honest (stdlib instance methods; structurally-
+  typed member calls marked ambiguous). Full table:
+  semlock/extractors/typescript/README.md. 50 tests green; ruff+mypy strict
+  clean; determinism byte-identical across processes.
