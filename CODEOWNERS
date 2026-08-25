@@ -1,0 +1,36 @@
+# CODEOWNERS — mirrors ownership.yaml (S1 is the single source; keep in sync).
+# CI additionally enforces per-session path ownership via ownership_guard.py.
+
+# S1: contracts, schemas, docs, mocks, CI
+/semlock/ir/                 @session-1
+/semlock/extractors/base.py  @session-1
+/semlock/extractors/registry.py @session-1
+/schema/                     @session-1
+/docs/                       @session-1
+/mocks/                      @session-1
+/.github/                    @session-1
+/CODEOWNERS                  @session-1
+/pyproject.toml              @session-1
+/README.md                   @session-1
+
+# S2: extraction
+/semlock/extractors/python/     @session-2
+/semlock/extractors/typescript/ @session-2
+
+# S3: resolution
+/semlock/resolution/        @session-3
+
+# S4: graph + conflict engine
+/semlock/graph/             @session-4
+/semlock/engine/            @session-4
+
+# S5: git/cli/output/config/cache
+/semlock/git/               @session-5
+/semlock/cli/               @session-5
+/semlock/output/            @session-5
+/semlock/config/            @session-5
+/semlock/cache/             @session-5
+
+# S6: benchmarks + corpus
+/bench/                     @session-6
+/corpus/                    @session-6

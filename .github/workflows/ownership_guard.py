@@ -71,7 +71,12 @@ def changed_files(base: str, head: str) -> list[str]:
 
 
 def matches(path: str, pattern: str) -> bool:
-    return fnmatch.fnmatch(path, pattern.rstrip("/") + "/*") or path == pattern or path.startswith(pattern)
+    pat = pattern.rstrip("/")
+    return (
+        fnmatch.fnmatch(path, pat + "/*")
+        or path == pattern
+        or path.startswith(pattern)
+    )
 
 
 def main() -> int:
@@ -87,7 +92,10 @@ def main() -> int:
         check=True, capture_output=True, text=True,
     ).stdout.strip()
     if not head_branch.startswith("session/"):
-        print(f"[ownership] branch {head_branch!r} is not a session branch; allowing (main/admin).")
+        print(
+            f"[ownership] branch {head_branch!r} is not a session branch; "
+            "allowing (main/admin)."
+        )
         return 0
     prefix = head_branch.split("-", 1)[0] + "-"  # e.g. "session/1-"
 
