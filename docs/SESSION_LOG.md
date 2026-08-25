@@ -23,7 +23,6 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
   scenarios + 1 clean-merge TN in changeset_fixtures/conflict_fixtures),
   `docs/PROJECT_CONSTITUTION.md` (binding), ADR-0001. CI: ruff+mypy --strict+
   pytest all green locally; GitHub workflow lands with this merge.
-
 - 2026-08-25 S1: claim-graph schema frozen; ADR-0003/0004 ratified; S4 ownership
   extended — S4 clear to merge. Details: schema/claim-graph.schema.json frozen from
   semlock/graph/export.py::claim_graph_to_json (wire 0.1.0, ir 0.2.0); validated
@@ -68,3 +67,52 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
   machinery until extractors land; e2e skeptical-engineer two-branch test.
   Consumable now: installed `semlock` console script works from any cwd;
   mocks/ is a lazy test-only dependency.
+- 2026-08-25 S2 (session/2-python): Python extractor + resolver SPIKE landed.
+  Consumable now: `semlock.extractors.python` registers Extractor+Resolver;
+  deep extraction (symbols w/ param kinds+annotations, class members incl.
+  property twins + self.x stores as first-class bindable ids, typed-local
+  channel, imports/refs with evidence-carrying Ref.name encodings) and a
+  ref-wide resolver (aliases, relative/package imports, re-export chains to
+  ORIGINAL ids, __all__ star binding, receiver typing, builtins→external,
+  explicit ambiguous/unresolved) + resolution_coverage(). Fixture pairs for all
+  four classes under tests/fixtures/python/{conflict,clean}/; 51 S2 tests green
+  (84 total); ruff+mypy --strict clean; cross-process byte-determinism checked.
+  Measured coverage on fixture scenario B-side: 5/5 resolved (100%).
+  THE FIVE SPIKE ANSWERS (IR_CONTRACT §6):
+  - Q1 identity: dotted scheme INSUFFICIENT — need module_path separated:
+    `<module_path>::<qualified_name>` (e.g. pkg.models::User.greet). Counterexample:
+    file a/b.py with class c/method d vs package a/b/c/__init__.py with function d
+    both collapse to dotted "a.b.c.d"; import binding also needs the module prefix
+    explicitly for relative-import math. Members resolve to their OWN canonical id
+    `<class_id>.<member>` (pkg.models::User.email) — never suffixed parent ids.
+    Module-granular deps (plain `import a.b`) propose bare module_path target
+    (grammar-distinct: no "::").
+  - Q2 params: KEEP kinds. kw-only vs positional changes the breakage class;
+    *args/**kwargs absorb arity deltas (without kinds → false positives). Flag:
+    added-required / removed / renamed(kw-callers) / non-absorbable reorder /
+    annotation retype / default REMOVED. Added-default is compatible (clean).
+    Positional-only "/" collapses to "positional" (documented).
+  - Q3 returns: declared-only YES; unannotated-but-inferable stays NULL —
+    inference must never masquerade as declaration (oracle mismatch risk);
+    inference may drive RESOLUTION internally only. Text as written; one layer of
+    forward-ref quotes stripped; whitespace collapsed.
+  - Q4 use-sites: reliably produced: call (bare + chains), read (incl. base-class
+    mentions), write (attribute stores), attribute loads, import. REQUESTS:
+    (a) bless Ref.name evidence encodings — from-imports "<alias>=<origin-as-written>",
+    wildcards "*=<origin>", plain imports "<alias>~<module>", chains as written
+    ("obj.method"); the provisional mock convention (name="User") cannot carry
+    aliases/origins and cannot support resolver math.
+    (b) subclass mentions ride kind="read" — bless or add kind pre-freeze.
+    (c) untyped-receiver refs are emitted but can ONLY be unresolved; engine must
+    ignore them (INV-2 already guarantees no match).
+  - Q5 resolution: resolved = unique def via deterministic rules (module tables,
+    last-import-wins alias maps, re-export chains w/ cycle detection to ORIGINAL
+    id, __all__-aware star binding, receiver typing from declared annotations +
+    typed-local channel + self/cls, one inheritance hop); external = frozen
+    builtin set or root provably absent from fileset; ambiguous = >=2 equally-
+    ranked candidates (star collisions, duplicated module paths); unresolved =
+    everything else. Ambiguous stays rare because extractors emit exports and
+    stable module identities.
+  BLOCKER (interface-request filed): pyproject.toml (S1-owned) needs tree-sitter +
+  tree-sitter-python runtime entries before CI can run S2 tests — exact lines in
+  the issue. Local venv installs them manually until then.
