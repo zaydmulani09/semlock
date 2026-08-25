@@ -4,6 +4,18 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
 
 - 2026-08-25 S1: Founding contract files on main (IR_CONTRACT, SEMANTIC_INVARIANTS,
   S1_DAY1_CHECKLIST, schema/ir.schema.json, ownership.yaml, ownership_guard.py).
+- 2026-08-25 S1: IR FROZEN at 0.2.0 — added Reference.module_specifier +
+  imported_name (S3 #3), ratified module_path::qualified_name grammar,
+  ADR-0008 + TS ownership + tree-sitter deps landed. Post-freeze changes
+  require ADR.
+- 2026-08-25 S1: S2 and S3 cleared to rebase onto 0.2.0. Their PRs will pass the
+  ownership guard (S2: semlock/extractors/python/, tests/unit+fixtures/python/;
+  S3: semlock/extractors/typescript/, semlock/resolution/, tests/unit+fixtures/
+  typescript/) and the schema guard via ADR-0008 (referenced by this freeze).
+  Runtime deps tree-sitter/tree-sitter-python/tree-sitter-typescript now in
+  pyproject — CI installs them with `-e .[dev]`. Verified: ownership guard passes
+  for an S3-authored TS path and fails an S2-authored TS path; ruff+mypy --strict+
+  pytest (39) green; serialize round-trip byte-identical rerun confirmed.
 - 2026-08-25 S1: IR provisional + mocks + seam landed — S2-S6 go.
   Consumable now: `semlock/ir/model.py` (+`serialize`, `version`=0.1.0 PROVISIONAL),
   `semlock/extractors/base.py` (Extractor+Resolver ABCs) + `registry.py`,
