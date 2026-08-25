@@ -5,9 +5,11 @@ rows:
   - session: S1
     branch_prefix: "session/1-"
     paths:
+      - "semlock/__init__.py"
       - "semlock/ir/"
       - "semlock/extractors/base.py"
       - "semlock/extractors/registry.py"
+      - "semlock/extractors/__init__.py"
       - "schema/"
       - "docs/"
       - "mocks/"

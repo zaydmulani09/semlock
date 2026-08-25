@@ -30,6 +30,7 @@ def load_rows(repo: Path) -> tuple[list[dict], list[str]]:
 
 
 def _parse_minimal(text: str) -> tuple[list[dict], list[str]]:
+    """Indentation-light parser: keys are unique so content patterns suffice."""
     rows: list[dict] = []
     common: list[str] = []
     current_row: dict | None = None
@@ -37,19 +38,18 @@ def _parse_minimal(text: str) -> tuple[list[dict], list[str]]:
     for raw in text.splitlines():
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
-        indent = len(raw) - len(raw.lstrip())
         line = raw.strip()
-        if indent == 0 and line.startswith("- session:"):
-            current_row = {"session": line.split(":", 1)[1].strip(), "paths": []}
+        if line.startswith("- session:"):
+            current_row = {"session": _unquote(line.split(":", 1)[1]), "paths": []}
             rows.append(current_row)
             in_common = False
-        elif line.startswith("common:"):
+        elif line == "common:":
             in_common = True
             current_row = None
         elif line.startswith("branch_prefix:") and current_row is not None:
             current_row["branch_prefix"] = _unquote(line.split(":", 1)[1])
-        elif line.lstrip().startswith("- ") and isinstance(line.lstrip()[2:], str):
-            val = _unquote(line.lstrip()[2:])
+        elif line.startswith("- "):
+            val = _unquote(line[2:])
             if in_common:
                 common.append(val)
             elif current_row is not None:
@@ -71,7 +71,12 @@ def changed_files(base: str, head: str) -> list[str]:
 
 
 def matches(path: str, pattern: str) -> bool:
-    return fnmatch.fnmatch(path, pattern.rstrip("/") + "/*") or path == pattern or path.startswith(pattern)
+    pat = pattern.rstrip("/")
+    return (
+        fnmatch.fnmatch(path, pat + "/*")
+        or path == pattern
+        or path.startswith(pattern)
+    )
 
 
 def main() -> int:
@@ -87,7 +92,10 @@ def main() -> int:
         check=True, capture_output=True, text=True,
     ).stdout.strip()
     if not head_branch.startswith("session/"):
-        print(f"[ownership] branch {head_branch!r} is not a session branch; allowing (main/admin).")
+        print(
+            f"[ownership] branch {head_branch!r} is not a session branch; "
+            "allowing (main/admin)."
+        )
         return 0
     prefix = head_branch.split("-", 1)[0] + "-"  # e.g. "session/1-"
 
