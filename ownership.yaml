@@ -5,6 +5,7 @@ rows:
   - session: S1
     branch_prefix: "session/1-"
     paths:
+      - "ownership.yaml"
       - "semlock/__init__.py"
       - "semlock/ir/"
       - "semlock/extractors/base.py"
@@ -21,7 +22,15 @@ rows:
     branch_prefix: "session/2-"
     paths:
       - "semlock/extractors/python/"
+      - "tests/unit/python/"
+      - "tests/fixtures/python/"
+  - session: S3
+    branch_prefix: "session/3-"
+    paths:
       - "semlock/extractors/typescript/"
+      - "semlock/resolution/"
+      - "tests/unit/typescript/"
+      - "tests/fixtures/typescript/"
   - session: S3
     branch_prefix: "session/3-"
     paths:

@@ -218,6 +218,8 @@ def ref_to_dict(ref: Ref) -> dict[str, Any]:
         "name": ref.name,
         "kind": ref.kind,
         "span": span_to_dict(ref.span),
+        "module_specifier": ref.module_specifier,
+        "imported_name": ref.imported_name,
         "resolution": resolution_to_dict(ref.resolution),
     }
 
@@ -301,6 +303,8 @@ def _ref_from_dict(d: dict[str, Any]) -> Ref:
         kind=d["kind"],
         span=_span_from_dict(d["span"]),
         resolution=_resolution_from_dict(d["resolution"]),
+        module_specifier=d.get("module_specifier"),
+        imported_name=d.get("imported_name"),
     )
 
 

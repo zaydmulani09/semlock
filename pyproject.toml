@@ -9,7 +9,13 @@ description = "Deterministic, local-first pre-merge semantic conflict detection.
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-dependencies = [] # stdlib only until tree-sitter lands via S2 (Constitution §9)
+dependencies = [
+    # Constitution §9: stdlib + tree-sitter (+ per-language grammars) only.
+    # Grammar AST shapes pinned for INV-1 determinism; bumps re-run full suites.
+    "tree-sitter>=0.23,<0.27",
+    "tree-sitter-python>=0.23,<0.24",
+    "tree-sitter-typescript>=0.23,<0.24",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "mypy>=1.8", "ruff>=0.4"]

@@ -1,12 +1,12 @@
-# IR_CONTRACT.md — FileFacts Intermediate Representation (v0.1.0 — PROVISIONAL)
+# IR_CONTRACT.md — FileFacts Intermediate Representation (v0.2.0 — FROZEN)
 
 **Status:** binding contract for S2 (extractors), S3 (resolvers), S4 (conflict engine),
 S5 (cache/config), S6 (benchmarks). Owned by S1. Changes require an ADR with an
 `IR-CHANGE-ADR:` line, a FORMAT_VERSION bump, and synchronized model+schema+mock updates.
 
-> **THIS VERSION IS PROVISIONAL.** It ships Day 1 to unblock S2–S6 spikes. It freezes at
-> **0.2.0** Day 2 EOD after exactly ONE deliberate revision driven by the spike answers
-> below. Build against it; expect one break.
+> **FROZEN at 0.2.0** (Day 2 EOD). The single deliberate revision ratified the
+> `<module_path>::<qualified_name>` id grammar and added `Ref.module_specifier` /
+> `Ref.imported_name` (S3 issue #3; ADR-0008). Post-freeze changes require ADR + bump.
 
 Normative companions: `docs/SEMANTIC_INVARIANTS.md` (invariants INV-1..INV-8),
 `schema/ir.schema.json` (wire validation).
@@ -28,14 +28,25 @@ cross-branch semantic breaks that `git merge` cannot see.
 | `Member` | `name`, `type_annotation` \| null, `span` |
 | `Symbol` | `id`, `name`, `kind` ∈ {`function`,`method`,`class`,`interface`,`type_alias`,`variable`}, `span`, `exports`: bool, `bases`: tuple[str], `signature`: Signature \| null, `members`: tuple[Member] |
 | `Resolution` | `status` ∈ {`unresolved`,`resolved`,`external`,`ambiguous`}, `target_id`: str \| null (set iff status=`resolved`) |
-| `Ref` | `name`, `kind` ∈ {`call`,`read`,`write`,`import`,`attribute`}, `span`, `resolution`: Resolution (default `unresolved`) |
+| `Ref` | `name`, `kind` ∈ {`call`,`read`,`write`,`import`,`attribute`}, `span`, `module_specifier`: str \| null, `imported_name`: str \| null, `resolution`: Resolution (default `unresolved`) |
 | `FileFacts` | `format_version`, `path` (repo-relative, `/` separators), `language` ∈ {`python`,`typescript`}, `ref`, `symbols`: tuple[Symbol], `refs`: tuple[Ref] |
 
 Rules:
 
-- `Symbol.id` is the dotted qualified name rooted at the module/package path
-  (e.g. `pkg.models.User.greet`; TypeScript: `src/models/user.User.greet`).
-  Exact scheme is Spike Question Q1.
+- **Identity grammar (0.2.0):** `id = "<module_path>::<qualified_name>"`; `::` is the
+  SOLE module/qualname separator (exactly one per id). Member use-sites bind to the
+  member's OWN canonical id `<class_id>.<member>` (e.g. `pkg.models::User.email`);
+  suffixed parent ids are malformed. Module-granular dependencies (plain `import a.b`)
+  use the bare `module_path` as `target_id` — grammar-distinct by absence of `::`.
+  Rationale: dotted ids collide (`a/b.py::c.d` vs package `a/b/c/__init__.py::d`;
+  TS `src/v1.2/` dirs contain dots).
+- `Ref.module_specifier` = import source AS WRITTEN (`"./config"`, `"@models/user"`,
+  `"pkg.models"`); null for non-import refs. `Ref.imported_name` = original exported
+  name when the local binding is aliased; else null. Constraint: `imported_name`
+  requires `module_specifier`.
+- `Ref.name` is use-site EVIDENCE and may carry producer encodings for import forms
+  (e.g. from-imports `"alias=origin.as.written"`, plain imports `"alias~written.module"`).
+  The engine matches ONLY on `resolution.target_id`; never parse `name` for semantics.
 - Every `Ref.resolution` starts `unresolved`. Only a Resolver may upgrade it (INV-2).
   An extractor that emits `resolved` is in violation of the seam.
 - Sort orders: symbols by `(span, id)`; members by `name`; refs by `(span, name)` (INV-5).
@@ -54,13 +65,13 @@ Serialized FileFacts (abbreviated to one symbol + one external ref):
 
 ```json
 {
-  "format_version": "0.1.0",
+  "format_version": "0.2.0",
   "path": "pkg/models.py",
   "language": "python",
   "ref": "main",
   "symbols": [
     {
-      "id": "pkg.models.User.greet",
+      "id": "pkg.models::User.greet",
       "name": "greet",
       "kind": "method",
       "span": {"start_line": 2, "start_col": 4, "end_line": 3, "end_col": 30},
@@ -83,6 +94,8 @@ Serialized FileFacts (abbreviated to one symbol + one external ref):
       "name": "print",
       "kind": "call",
       "span": {"start_line": 9, "start_col": 4, "end_line": 9, "end_col": 15},
+      "module_specifier": null,
+      "imported_name": null,
       "resolution": {"status": "external", "target_id": null}
     }
   ]
@@ -123,6 +136,7 @@ S2 + S3 must answer these; S1 turns the answers into the single 0.2.0 revision:
 
 ## 7. Versioning
 
-`FORMAT_VERSION` lives in `semlock/ir/version.py`. Current: **`0.1.0` (provisional)**.
-Freeze target: **`0.2.0`** Day 2 EOD. After freeze, changes require ADR + bump + S4/S6
-sign-off.
+`FORMAT_VERSION` lives in `semlock/ir/version.py`. Current: **`0.2.0` (FROZEN,
+Day 2 EOD)**. The 0.1.0 provisional window is closed; spike answers Q1–Q5 are
+ratified in §2 and ADR-0008. Further changes require an ADR + version bump +
+synchronized model/schema/mocks update in one commit.

@@ -2,9 +2,9 @@
 until real extractors/resolvers land).
 
 Seeded from the canonical `pkg.models::User.greet` example in docs/IR_CONTRACT.md §3.
-All refs arrive PRE-resolved — these are post-Resolver artifacts. Field-access refs use
-the provisional convention `target_id = "<owner_symbol_id>.<member>"` (pending spike
-Q5; may change in the single 0.2.0 revision).
+All refs arrive PRE-resolved — these are post-Resolver artifacts. Ids use the ratified
+0.2.0 grammar `<module_path>::<qualified_name>`; member access binds to the member's
+own id `<module_path>::<Owner>.<member>` (ADR-0008).
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def canonical_example() -> FileFacts:
         ref="main",
         symbols=(
             Symbol(
-                id="pkg.models.User.greet",
+                id="pkg.models::User.greet",
                 name="greet",
                 kind="method",
                 span=_span(2, 4, 3, 30),
@@ -82,7 +82,7 @@ def models_main(ref: str = MAIN) -> FileFacts:
         ref=ref,
         symbols=(
             Symbol(
-                id="pkg.models.User",
+                id="pkg.models::User",
                 name="User",
                 kind="class",
                 span=_span(3, 0, 12, 34),
@@ -92,7 +92,7 @@ def models_main(ref: str = MAIN) -> FileFacts:
                 ),
             ),
             Symbol(
-                id="pkg.models.User.greet",
+                id="pkg.models::User.greet",
                 name="greet",
                 kind="method",
                 span=_span(8, 4, 9, 34),
@@ -106,7 +106,7 @@ def models_main(ref: str = MAIN) -> FileFacts:
                 ),
             ),
             Symbol(
-                id="pkg.models.format_greeting",
+                id="pkg.models::format_greeting",
                 name="format_greeting",
                 kind="function",
                 span=_span(11, 0, 12, 34),
@@ -122,7 +122,7 @@ def models_main(ref: str = MAIN) -> FileFacts:
                 name="greet",
                 kind="call",
                 span=_span(12, 11, 12, 29),
-                resolution=_resolved("pkg.models.User.greet"),
+                resolution=_resolved("pkg.models::User.greet"),
             ),
         ),
     )
@@ -144,7 +144,7 @@ def app_consumer(ref: str = SIDE_B) -> FileFacts:
         ref=ref,
         symbols=(
             Symbol(
-                id="pkg.app.welcome",
+                id="pkg.app::welcome",
                 name="welcome",
                 kind="function",
                 span=_span(3, 0, 6, 41),
@@ -160,32 +160,79 @@ def app_consumer(ref: str = SIDE_B) -> FileFacts:
                 name="User",
                 kind="import",
                 span=_span(1, 20, 1, 24),
-                resolution=_resolved("pkg.models.User"),
+                resolution=_resolved("pkg.models::User"),
+                module_specifier="pkg.models",
             ),
             Ref(
                 name="format_greeting",
                 kind="import",
                 span=_span(1, 26, 1, 41),
-                resolution=_resolved("pkg.models.format_greeting"),
+                resolution=_resolved("pkg.models::format_greeting"),
+                module_specifier="pkg.models",
             ),
             Ref(
                 name="greet",
                 kind="call",
                 span=_span(4, 14, 4, 33),
-                resolution=_resolved("pkg.models.User.greet"),
+                resolution=_resolved("pkg.models::User.greet"),
             ),
             Ref(
                 name="format_greeting",
                 kind="call",
                 span=_span(5, 13, 5, 32),
-                resolution=_resolved("pkg.models.format_greeting"),
+                resolution=_resolved("pkg.models::format_greeting"),
             ),
-            # Provisional convention: member access resolves to <symbol>.<member>.
+            # Ratified in 0.2.0: member access resolves to the member's OWN id
+            # <module_path>::<Owner>.<member> (ADR-0008).
             Ref(
                 name="email",
                 kind="attribute",
                 span=_span(6, 15, 6, 25),
-                resolution=_resolved("pkg.models.User.email"),
+                resolution=_resolved("pkg.models::User.email"),
+            ),
+        ),
+    )
+
+
+def ts_consumer_aliased(ref: str = SIDE_B) -> FileFacts:
+    """src/app.ts on side B — aliased import + receiver-typed member call:
+
+        1: import { User as U } from "./models/user";
+        3: export function welcome(u: U): string {
+        4:     return u.greet(name="Ada");
+    """
+    return FileFacts(
+        format_version=FORMAT_VERSION,
+        path="src/app.ts",
+        language="typescript",
+        ref=ref,
+        symbols=(
+            Symbol(
+                id="src/app::welcome",
+                name="welcome",
+                kind="function",
+                span=_span(3, 0, 4, 33),
+                exports=True,
+                signature=Signature(
+                    params=(Param("u", 0, "positional", "U", False),),
+                    return_type="string",
+                ),
+            ),
+        ),
+        refs=(
+            Ref(
+                name="U",
+                kind="import",
+                span=_span(1, 7, 1, 40),
+                resolution=_resolved("src/models::User"),
+                module_specifier="./models/user",
+                imported_name="User",
+            ),
+            Ref(
+                name="greet",
+                kind="call",
+                span=_span(4, 11, 4, 28),
+                resolution=_resolved("src/models::User.greet"),
             ),
         ),
     )
@@ -194,7 +241,7 @@ def app_consumer(ref: str = SIDE_B) -> FileFacts:
 def models_signature_changed(ref: str = SIDE_A) -> FileFacts:
     """Side A renames greet's parameter `name` -> `greeting` (kw-caller breaks)."""
     base = models_main(ref)
-    greet = next(s for s in base.symbols if s.id == "pkg.models.User.greet")
+    greet = next(s for s in base.symbols if s.id == "pkg.models::User.greet")
     new_greet = Symbol(
         id=greet.id,
         name=greet.name,
@@ -222,7 +269,7 @@ def models_signature_changed(ref: str = SIDE_A) -> FileFacts:
 def models_field_removed(ref: str = SIDE_A) -> FileFacts:
     """Side A removes the `email` member from User."""
     base = models_main(ref)
-    user = next(s for s in base.symbols if s.id == "pkg.models.User")
+    user = next(s for s in base.symbols if s.id == "pkg.models::User")
     no_email = Symbol(
         id=user.id,
         name=user.name,
@@ -246,7 +293,7 @@ def models_field_removed(ref: str = SIDE_A) -> FileFacts:
 def models_return_changed(ref: str = SIDE_A) -> FileFacts:
     """Side A changes greet's declared return type str -> GreetingResult."""
     base = models_main(ref)
-    greet = next(s for s in base.symbols if s.id == "pkg.models.User.greet")
+    greet = next(s for s in base.symbols if s.id == "pkg.models::User.greet")
     changed = Symbol(
         id=greet.id,
         name=greet.name,
@@ -278,7 +325,7 @@ def models_export_removed(ref: str = SIDE_A) -> FileFacts:
         path=base.path,
         language=base.language,
         ref=base.ref,
-        symbols=tuple(s for s in base.symbols if s.id != "pkg.models.format_greeting"),
+        symbols=tuple(s for s in base.symbols if s.id != "pkg.models::format_greeting"),
         refs=(),
     )
 
@@ -287,7 +334,7 @@ def models_new_method_added(ref: str = SIDE_A) -> FileFacts:
     """Side A adds a brand-new method; old surface untouched (true-negative seed)."""
     base = models_main(ref)
     added = Symbol(
-        id="pkg.models.User.shout",
+        id="pkg.models::User.shout",
         name="shout",
         kind="method",
         span=_span(10, 4, 11, 34),

@@ -66,9 +66,10 @@ def test_assert_unresolved_flags_resolved_mocks() -> None:
 
 def test_assert_unresolved_passes_on_fresh_facts() -> None:
     from semlock.ir.model import FileFacts, Ref, Span
+    from semlock.ir.version import FORMAT_VERSION
 
     fresh = FileFacts(
-        format_version="0.1.0",
+        format_version=FORMAT_VERSION,
         path="a.py",
         language="python",
         ref="main",

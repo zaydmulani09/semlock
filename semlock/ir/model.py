@@ -109,16 +109,29 @@ class Resolution:
 
 @dataclass(frozen=True, slots=True)
 class Ref:
-    """Use-site awaiting resolution. Constructed unresolved by Extractors."""
+    """Use-site awaiting resolution. Constructed unresolved by Extractors.
+
+    0.2.0: `module_specifier` carries the import source as written ("./config",
+    "pkg.models") for kind="import" refs; None otherwise. `imported_name` carries the
+    ORIGINAL exported name when the local binding is aliased ("useState" for
+    `import { useState as useSt }`); None when not aliased or not an import.
+    """
 
     name: str
     kind: RefKind
     span: Span
     resolution: Resolution = Resolution()
+    module_specifier: str | None = None
+    imported_name: str | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("Ref.name must be non-empty")
+        if self.imported_name is not None and self.module_specifier is None:
+            raise ValueError(
+                "Ref.imported_name requires module_specifier (an aliased import "
+                f"must know its source): {self!r}"
+            )
 
 
 @dataclass(frozen=True, slots=True)

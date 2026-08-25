@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["format_version", "path", "language", "ref", "symbols", "refs"],
   "properties": {
-    "format_version": { "const": "0.1.0" },
+    "format_version": { "const": "0.2.0" },
     "path": { "type": "string", "pattern": "^[^\\\\]+$", "description": "repo-relative, forward slashes only" },
     "language": { "enum": ["python", "typescript"] },
     "ref": { "type": "string", "minLength": 1 },
@@ -68,7 +68,12 @@
       "additionalProperties": false,
       "required": ["id", "name", "kind", "span", "exports", "bases", "signature", "members"],
       "properties": {
-        "id": { "type": "string", "minLength": 1, "description": "dotted qualified name, e.g. pkg.models.User.greet" },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^:]+::[^:]+$",
+          "description": "<module_path>::<qualified_name>; '::' is the sole separator, so exactly one occurrence"
+        },
         "name": { "type": "string", "minLength": 1 },
         "kind": { "enum": ["function", "method", "class", "interface", "type_alias", "variable"] },
         "span": { "$ref": "#/$defs/span" },
@@ -84,7 +89,11 @@
       "required": ["status", "target_id"],
       "properties": {
         "status": { "enum": ["unresolved", "resolved", "external", "ambiguous"] },
-        "target_id": { "type": ["string", "null"] }
+        "target_id": {
+          "type": ["string", "null"],
+          "pattern": "^([^:]+::[^:]+|[^:]+)$",
+          "description": "symbol id (<module_path>::<qualified_name>, member refs bind to the member's own id) or bare module_path for module-granular dependencies"
+        }
       },
       "allOf": [
         {
@@ -100,13 +109,29 @@
     "ref": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "kind", "span", "resolution"],
+      "required": ["name", "kind", "span", "module_specifier", "imported_name", "resolution"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "kind": { "enum": ["call", "read", "write", "import", "attribute"] },
         "span": { "$ref": "#/$defs/span" },
+        "module_specifier": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "import source as written ('./config', 'pkg.models'); null for non-import refs"
+        },
+        "imported_name": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "original exported name when the local binding is aliased; else null"
+        },
         "resolution": { "$ref": "#/$defs/resolution" }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["imported_name"], "properties": { "imported_name": { "type": "string" } } },
+          "then": { "properties": { "module_specifier": { "type": "string" } }, "required": ["imported_name", "module_specifier"] }
+        }
+      ]
     }
   }
 }
