@@ -269,6 +269,50 @@ def test_undefined_name_is_unresolved():
     assert status_of(files, "m.py", "call", "mystery") == "unresolved"
 
 
+def test_from_import_of_submodule_binds_module_and_chains():
+    files = side(
+        ("pkg/__init__.py", ""),
+        ("pkg/models.py", "class User:\n    email: int = 0\n"),
+        ("app.py",
+         "from pkg import models\n"
+         "def run():\n"
+         "    u = models.User\n"
+         "    return u.email\n"),
+    )
+    # `from X import Y` where Y is a SUBMODULE binds the module itself.
+    assert status_of(files, "app.py", "import", "models=pkg.models") == "resolved"
+    assert target_of(files, "app.py", "import", "models=pkg.models") == "pkg.models"
+    # Attribute chain walks module -> class symbol id.
+    assert status_of(files, "app.py", "attribute", "models.User") == "resolved"
+    assert target_of(files, "app.py", "attribute", "models.User") == (
+        "pkg.models::User"
+    )
+
+
+def test_member_access_off_ctor_call_stays_unresolved():
+    files = side(
+        ("pkg/__init__.py", ""),
+        ("pkg/models.py", "class User:\n    email: int = 0\n"),
+        ("app.py",
+         "from pkg import models\n"
+         "def run():\n"
+         "    return models.User().email\n"),
+    )
+    # Constructor call resolves; `.email` hangs off the CALL RESULT whose type we
+    # do not flow (declared-only evidence) -> honest unresolved, never guessed.
+    assert target_of(files, "app.py", "call", "models.User") == "pkg.models::User"
+    assert status_of(files, "app.py", "attribute", "email") == "unresolved"
+
+
+def test_resolver_refuses_mismatched_format_version():
+    import dataclasses
+
+    facts = EX.extract_file("m.py", "side", "x = 1\n")
+    stale = dataclasses.replace(facts, format_version="0.1.0")
+    with pytest.raises(ValueError, match="INV-6"):
+        RESOLVE.resolve((stale,))
+
+
 def test_duplicate_module_paths_are_ambiguous():
     first = EX.extract_file("dup/m.py", "sideA",
                             "def f() -> int:\n    return 1\n")

@@ -35,6 +35,7 @@ from typing import ClassVar, Literal
 from semlock.extractors.base import Resolver
 from semlock.extractors.python.module_paths import absolutize, module_info
 from semlock.ir.model import FileFacts, Ref, Resolution, Symbol
+from semlock.ir.version import FORMAT_VERSION
 
 # Frozen builtin names (CPython 3.10 baseline). Literal, not derived at runtime:
 # deriving from the running interpreter would leak interpreter version into
@@ -277,6 +278,13 @@ def _contains(outer: Symbol, line: int, col: int) -> bool:
 class _Resolver:
     def __init__(self, files: tuple[FileFacts, ...]) -> None:
         self._order = files
+        for facts in files:
+            if facts.format_version != FORMAT_VERSION:
+                # INV-6: consumers refuse mismatched versions; never guess.
+                raise ValueError(
+                    f"{facts.path}: format_version {facts.format_version!r} != "
+                    f"supported {FORMAT_VERSION!r} (INV-6)"
+                )
         self.tables: dict[str, _ModuleTable] = {}
         self.file_ctxs: dict[str, _FileCtx] = {}  # keyed by facts.path
         for facts in files:

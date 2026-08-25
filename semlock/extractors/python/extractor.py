@@ -10,11 +10,14 @@ Design notes (binding for this implementation):
   suffixed parent id.
 - Every ``Ref`` is emitted with default resolution (INV-2); only a Resolver may
   upgrade statuses.
-- Evidence the resolver needs flows through legal IR fields:
-    * from-imports encode ``"<alias>=<origin-as-written>"`` in ``Ref.name``
-      (wildcards: ``"*=<origin>"``); plain imports encode
-      ``"<alias>~<written-module>"`` — distinct markers because they bind
-      different things (tail symbol vs root package);
+- Evidence channels flow through legal IR fields (0.2.0 FROZEN):
+    * ``Ref.module_specifier`` carries the import source as written
+      ("pkg.models", ".rel.mod"); ``Ref.imported_name`` carries the original
+      exported name ONLY when the local binding is aliased;
+    * from-imports additionally encode ``"<alias>=<origin-as-written>"`` in
+      ``Ref.name`` (wildcards: ``"*=<origin>"``); plain imports encode
+      ``"<alias>~<written-module>"`` — these encodings are ratified by
+      IR_CONTRACT §2; the engine matches only on resolution.target_id;
     * attribute-rooted uses record the written chain (``"user.greet"``,
       ``"pkg.models.User"``) in ``Ref.name``; chains whose root is not a plain
       identifier record only the trailing segments;
@@ -125,8 +128,24 @@ class _Walker:
 
     # ------------------------------------------------------------------ helpers
 
-    def _ref(self, name: str, kind: RefKind, node: Node) -> None:
-        self.refs.append(Ref(name=name, kind=kind, span=_span(node)))
+    def _ref(
+        self,
+        name: str,
+        kind: RefKind,
+        node: Node,
+        *,
+        module_specifier: str | None = None,
+        imported_name: str | None = None,
+    ) -> None:
+        self.refs.append(
+            Ref(
+                name=name,
+                kind=kind,
+                span=_span(node),
+                module_specifier=module_specifier,
+                imported_name=imported_name,
+            )
+        )
 
     def _is_locally_bound(self, name: str) -> bool:
         """True iff `name` binds in an enclosing FUNCTION-like scope without a
@@ -885,7 +904,14 @@ class _Walker:
                     continue
                 written = _text(dn, self.source)
                 local = alias if alias is not None else written.split(".")[0]
-                self._ref(f"{local}~{written}", "import", child)
+                # Plain imports bind the ROOT package as the local name; the full
+                # written module is the existence dependency (0.2.0 evidence).
+                self._ref(
+                    f"{local}~{written}",
+                    "import",
+                    child,
+                    module_specifier=written,
+                )
             return
         module_node = stmt.child_by_field_name("module_name")
         if module_node is None:
@@ -900,7 +926,12 @@ class _Walker:
             if child.type == "dotted_name":
                 written_name = _text(child, self.source)
                 full = self._join_origin(origin, written_name)
-                self._ref(f"{written_name}={full}", "import", child)
+                self._ref(
+                    f"{written_name}={full}",
+                    "import",
+                    child,
+                    module_specifier=origin,
+                )
             elif child.type == "aliased_import":
                 dn = child.child_by_field_name("name")
                 al = child.child_by_field_name("alias")
@@ -909,9 +940,16 @@ class _Walker:
                 written_name = _text(dn, self.source)
                 full = self._join_origin(origin, written_name)
                 local = _text(al, self.source) if al is not None else written_name
-                self._ref(f"{local}={full}", "import", child)
+                aliased = al is not None
+                self._ref(
+                    f"{local}={full}",
+                    "import",
+                    child,
+                    module_specifier=origin,
+                    imported_name=written_name if aliased else None,
+                )
             elif child.type == "wildcard_import":
-                self._ref(f"*={origin}", "import", child)
+                self._ref(f"*={origin}", "import", child, module_specifier=origin)
 
     @staticmethod
     def _join_origin(origin: str, name: str) -> str:

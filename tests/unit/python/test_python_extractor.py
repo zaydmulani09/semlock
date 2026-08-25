@@ -208,6 +208,63 @@ def test_params_and_function_locals_suppressed_but_module_names_not():
 # ------------------------------------------------------- contract compliance
 
 
+def test_module_specifier_and_imported_name_per_import_form():
+    src = (
+        "import os.path\n"
+        "import numpy as np\n"
+        "from pkg.models import User\n"
+        "from pkg.models import User as U\n"
+        "from .rel.mod import Thing as T\n"
+        "from . import *\n"
+    )
+    facts = EX.extract_file("pkg/app.py", "main", src)
+    by_name = {r.name: r for r in facts.refs if r.kind == "import"}
+    assert by_name["os~os.path"].module_specifier == "os.path"
+    assert by_name["os~os.path"].imported_name is None
+    assert by_name["np~numpy"].module_specifier == "numpy"
+    assert by_name["np~numpy"].imported_name is None  # module binding, not export
+    assert by_name["User=pkg.models.User"].module_specifier == "pkg.models"
+    # unaliased from-import: original name IS the local name -> imported_name null
+    assert by_name["User=pkg.models.User"].imported_name is None
+    assert by_name["U=pkg.models.User"].module_specifier == "pkg.models"
+    assert by_name["U=pkg.models.User"].imported_name == "User"
+    assert by_name["T=.rel.mod.Thing"].module_specifier == ".rel.mod"
+    assert by_name["T=.rel.mod.Thing"].imported_name == "Thing"
+    assert by_name["*=."].module_specifier == "."
+    assert by_name["*=."].imported_name is None
+
+
+def test_non_import_refs_carry_null_module_evidence():
+    facts = EX.extract_file("m.py", "main", "def f() -> None:\n    print(1)\n")
+    for ref in facts.refs:
+        if ref.kind != "import":
+            assert ref.module_specifier is None
+            assert ref.imported_name is None
+
+
+def test_symbol_ids_match_frozen_grammar_pattern():
+    import re
+
+    pattern = re.compile(r"^[^:]+::[^:]+$")
+    src = (
+        "class A:\n"
+        "    def m(self) -> None:\n"
+        "        class Inner:\n"
+        "            pass\n"
+        "V = 1\n"
+    )
+    facts = EX.extract_file("deep/pkg/mod.py", "main", src)
+    for sym in facts.symbols:
+        assert pattern.match(sym.id), sym.id
+
+
+def test_format_version_stamped_from_ir_version():
+    from semlock.ir.version import FORMAT_VERSION
+
+    facts = EX.extract_file("m.py", "main", "X = 1\n")
+    assert facts.format_version == FORMAT_VERSION == "0.2.0"
+
+
 @pytest.mark.parametrize(
     "path,source",
     [
