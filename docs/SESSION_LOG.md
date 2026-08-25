@@ -116,3 +116,12 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
   BLOCKER (interface-request filed): pyproject.toml (S1-owned) needs tree-sitter +
   tree-sitter-python runtime entries before CI can run S2 tests — exact lines in
   the issue. Local venv installs them manually until then.
+- 2026-08-25 S2 (session/2-python): rebased onto IR 0.2.0 FROZEN; migrated clean
+  (id grammar + member ids + module-granular targets were already ratified-form).
+  Now populates Ref.module_specifier (import source as written) and
+  Ref.imported_name (aliased from-imports only) per 0.2.0. Hardening: INV-6
+  version gate in resolver (refuses mismatched facts), from-import-of-submodule
+  binding test, ctor-call-result member access pinned as honest unresolved,
+  frozen-grammar id pattern + format_version stamp tests. 58 S2 tests green
+  (97 total); ruff+mypy --strict clean. Consumable: unchanged seams, richer
+  import evidence for S4's engine matching on target_id only.
