@@ -2,6 +2,7 @@
 # CI additionally enforces per-session path ownership via ownership_guard.py.
 
 # S1: contracts, schemas, docs, mocks, CI
+/ownership.yaml              @session-1
 /semlock/ir/                 @session-1
 /semlock/extractors/base.py  @session-1
 /semlock/extractors/registry.py @session-1
@@ -13,12 +14,16 @@
 /pyproject.toml              @session-1
 /README.md                   @session-1
 
-# S2: extraction
+# S2: extraction + resolution (Python)
 /semlock/extractors/python/     @session-2
-/semlock/extractors/typescript/ @session-2
+/tests/unit/python/             @session-2
+/tests/fixtures/python/         @session-2
 
-# S3: resolution
-/semlock/resolution/        @session-3
+# S3: extraction + resolution (TypeScript) — first-class per ADR-0008
+/semlock/extractors/typescript/ @session-3
+/semlock/resolution/            @session-3
+/tests/unit/typescript/         @session-3
+/tests/fixtures/typescript/     @session-3
 
 # S4: graph + conflict engine
 /semlock/graph/             @session-4

@@ -21,7 +21,7 @@ EXPECTED_CONFLICTS: dict[str, tuple[ExpectedConflict, ...]] = {
     "signature_changed_param_renamed": (
         ExpectedConflict(
             conflict_class="signature_changed",
-            changed_symbol_id="pkg.models.User.greet",
+            changed_symbol_id="pkg.models::User.greet",
             consumer_ref_name="greet",
             note="param 'name' renamed to 'greeting'; B calls greet(name=...)",
         ),
@@ -29,7 +29,7 @@ EXPECTED_CONFLICTS: dict[str, tuple[ExpectedConflict, ...]] = {
     "removed_export_function_deleted": (
         ExpectedConflict(
             conflict_class="removed_export",
-            changed_symbol_id="pkg.models.format_greeting",
+            changed_symbol_id="pkg.models::format_greeting",
             consumer_ref_name="format_greeting",
             note="export deleted; B imports and calls it",
         ),
@@ -37,7 +37,7 @@ EXPECTED_CONFLICTS: dict[str, tuple[ExpectedConflict, ...]] = {
     "field_removed_email": (
         ExpectedConflict(
             conflict_class="field_removed",
-            changed_symbol_id="pkg.models.User.email",
+            changed_symbol_id="pkg.models::User.email",
             consumer_ref_name="email",
             note="member removed; B reads user.email (provisional convention)",
         ),
@@ -45,7 +45,7 @@ EXPECTED_CONFLICTS: dict[str, tuple[ExpectedConflict, ...]] = {
     "return_changed_greet_type": (
         ExpectedConflict(
             conflict_class="return_changed",
-            changed_symbol_id="pkg.models.User.greet",
+            changed_symbol_id="pkg.models::User.greet",
             consumer_ref_name="greet",
             note="declared return str -> GreetingResult; B consumes result as str",
         ),
