@@ -2,12 +2,13 @@
 
 Pins the ADR-0006 shape end-to-end at the git layer: one merge-base, per-side
 changed-file sets computed against it, and refusal behavior of fact collection
-until S2/S3 register implementations.
+when a language has no registered Extractor/Resolver.
 """
 from __future__ import annotations
 
 import pytest
 
+from semlock.extractors import registry
 from semlock.git import extract_at_ref, refs
 
 
@@ -55,7 +56,11 @@ def test_same_file_different_regions_merges_clean_textually(mini_repo) -> None:
     assert refs.changed_files(mini_repo.path, base, "feat/b") == ("pkg/models.py",)
 
 
-def test_collect_three_way_refusal_names_missing_stage(two_branch_repo) -> None:
+def test_collect_three_way_refusal_names_missing_stage(
+    two_branch_repo, monkeypatch
+) -> None:
+    monkeypatch.setattr(registry, "_REGISTRY", {})
+    monkeypatch.setattr(registry, "_bootstrapped", True)
     with pytest.raises(
         extract_at_ref.PipelineUnavailableError, match="python"
     ) as excinfo:

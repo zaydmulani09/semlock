@@ -1,8 +1,8 @@
 """S5 unit tests: CLI arg handling, exit codes 0/1/2, writer determinism.
 
-The real-pipeline path must refuse cleanly while S2/S3/S4 are unlanded;
-conflict paths use --inject-fixtures (explicitly a reporting-machinery
-harness, not source analysis).
+The real-pipeline path must refuse cleanly when a needed language has no
+registered Extractor/Resolver; conflict paths use --inject-fixtures
+(explicitly a reporting-machinery harness, not source analysis).
 """
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import json
 import pytest
 
 from semlock.cli import main as cli_main
+from semlock.extractors import registry
 
 CONFLICT_ARGS = ("signature_changed_param_renamed",)
 CLEAN_ARGS = ("clean_merge_new_method",)
@@ -41,13 +42,26 @@ def test_check_bad_ref_is_exit_2(two_branch_repo, capsys) -> None:
     assert "failed" in capsys.readouterr().err
 
 
-def test_check_real_pipeline_refuses_cleanly_until_engine_lands(
-    two_branch_repo, capsys
+def test_check_real_pipeline_refuses_cleanly_without_registered_language(
+    two_branch_repo, capsys, monkeypatch
 ) -> None:
+    monkeypatch.setattr(registry, "_REGISTRY", {})
+    monkeypatch.setattr(registry, "_bootstrapped", True)
     code = cli_main.main(_check_argv(two_branch_repo.path))
     assert code == 2
     err = capsys.readouterr().err.lower()
     assert "engine" in err or "extractor" in err
+
+
+def test_check_real_pipeline_runs_end_to_end_no_conflict(
+    two_branch_repo, capsys
+) -> None:
+    """Python extractor+resolver+engine are all landed: the real pipeline now
+    runs. feat/a and feat/b touch disjoint files with no semantic coupling,
+    so this is a true negative — zero findings, exit 0."""
+    code = cli_main.main(_check_argv(two_branch_repo.path))
+    assert code == 0
+    assert "no cross-branch semantic conflicts" in capsys.readouterr().out
 
 
 def test_check_injected_conflict_exits_1_with_dual_evidence(
@@ -140,10 +154,23 @@ def test_config_must_exist_when_given(two_branch_repo, capsys) -> None:
     assert "config" in capsys.readouterr().err.lower()
 
 
-def test_graph_pending_engine_is_exit_2(two_branch_repo, capsys) -> None:
+def test_graph_refuses_cleanly_without_registered_language(
+    two_branch_repo, capsys, monkeypatch
+) -> None:
+    monkeypatch.setattr(registry, "_REGISTRY", {})
+    monkeypatch.setattr(registry, "_bootstrapped", True)
     argv = ["graph", "feat/a", "--repo", str(two_branch_repo.path)]
     assert cli_main.main(argv) == 2
-    assert "not landed" in capsys.readouterr().err.lower()
+    err = capsys.readouterr().err.lower()
+    assert "extractor" in err or "resolver" in err
+
+
+def test_graph_runs_end_to_end(two_branch_repo, capsys) -> None:
+    argv = ["graph", "feat/a", "--repo", str(two_branch_repo.path)]
+    assert cli_main.main(argv) == 0
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert payload["ref"] == "feat/a"
 
 
 def test_graph_bad_ref_is_exit_2(two_branch_repo, capsys) -> None:

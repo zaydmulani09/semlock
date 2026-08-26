@@ -1,13 +1,16 @@
 """S5 unit tests: worktree checkout + registry dispatch (extract_at_ref).
 
-The registry is empty in this repo state (S2/S3 pending), so these tests pin
-the CONTRACT: clean refusal naming the missing stage, correct language routing
-by extension, and leak-free worktree lifecycle.
+Pins the CONTRACT: clean refusal naming the missing stage when a language has
+no registered Extractor/Resolver, correct language routing by extension, and
+leak-free worktree lifecycle. The refusal tests monkeypatch the registry
+empty rather than relying on an unregistered language existing process-wide,
+since python/typescript are both registered once S2/S3 land.
 """
 from __future__ import annotations
 
 import pytest
 
+from semlock.extractors import registry
 from semlock.git import extract_at_ref, refs
 
 
@@ -36,8 +39,10 @@ def test_worktree_at_checks_out_and_cleans_up(two_branch_repo) -> None:
 
 
 def test_collect_side_refuses_cleanly_without_registered_extractors(
-    two_branch_repo,
+    two_branch_repo, monkeypatch
 ) -> None:
+    monkeypatch.setattr(registry, "_REGISTRY", {})
+    monkeypatch.setattr(registry, "_bootstrapped", True)
     repo = two_branch_repo.path
     sha_a = refs.resolve_ref(repo, "feat/a")
     base = refs.merge_base(repo, "feat/a", "feat/b")
@@ -46,7 +51,11 @@ def test_collect_side_refuses_cleanly_without_registered_extractors(
         extract_at_ref.collect_side(repo, "feat/a", sha_a, base)
 
 
-def test_collect_three_way_fails_fast_before_any_extraction(two_branch_repo) -> None:
+def test_collect_three_way_fails_fast_before_any_extraction(
+    two_branch_repo, monkeypatch
+) -> None:
+    monkeypatch.setattr(registry, "_REGISTRY", {})
+    monkeypatch.setattr(registry, "_bootstrapped", True)
     with pytest.raises(extract_at_ref.PipelineUnavailableError):
         extract_at_ref.collect_three_way(two_branch_repo.path, "feat/a", "feat/b")
 
