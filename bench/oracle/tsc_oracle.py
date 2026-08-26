@@ -123,6 +123,10 @@ class TscOracle(Oracle):
     def __init__(self, tsc_bin: str | None = None) -> None:
         self._argv0 = discover_tsc(tsc_bin)
 
+    def version_argv(self) -> list[str]:
+        """argv prefix that runs the discovered checker (for --version)."""
+        return list(self._argv0)
+
     def check_state(self, state_dir: Path) -> tuple[SiteError, ...]:
         tsconfig = _write_tsconfig(state_dir)
         proc = subprocess.run(

@@ -49,6 +49,7 @@ class SyntheticCase:
     planted: tuple[PlantedRef, ...]
     expectation: dict[str, str]  # prediction_id -> Verdict value
     notes: str = ""
+    family_tag: str = ""  # adversarial FP-category tag; "" otherwise
 
 
 PY_MODELS_BASE = '''\
@@ -248,6 +249,7 @@ def _build_case_meta(case: SyntheticCase, out_dir: Path) -> None:
         "predictions": predictions,
         "expectation": expectation,
         "notes": case.notes,
+        "family_tag": case.family_tag,
     }
     (out_dir / "meta.json").write_text(
         json.dumps(document, indent=2, sort_keys=False) + "\n", encoding="utf-8"
@@ -690,7 +692,8 @@ def load_adversarial_fixtures() -> tuple[SyntheticCase, ...]:
                 side_b=states["side_b"],
                 planted=planted,
                 expectation=expectation_by_index,
-                notes=document.get("notes", ""),
+                notes=str(document.get("notes", "")),
+                family_tag=str(document.get("family_tag", "")),
             )
         )
     return tuple(cases)

@@ -149,3 +149,11 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
   typed member calls marked ambiguous). Full table:
   semlock/extractors/typescript/README.md. 50 tests green; ruff+mypy strict
   clean; determinism byte-identical across processes.
+- 2026-08-25 S6: Oracle + harness + corpus scaffolding landed on session/6-validation —
+  bench/oracle (ADR-0009): mypy/tsc oracles with counterfactual subtraction,
+  site-first + causal-chain attribution; VALIDATED on 17 synthetic cases
+  (4 classes x py/ts TP at predicted sites, clean-merge TNs silent, all 7
+  adversarial FP-traps rejected). bench/harness (mock predictor = plumbing only,
+  CLI seam documented), bench/label + corpus/labels schema, bench/report with
+  publishability gate, determinism tests byte-identical, repos.yaml + miner
+  scaffold. Consumable: python -m bench.run_benchmark --workdir <dir>.
