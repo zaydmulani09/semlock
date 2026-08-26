@@ -1,0 +1,19 @@
+{
+  "case_id": "ts-widening-optional-param",
+  "language": "typescript",
+  "family": "compatible_change",
+  "family_tag": "fp_compatible_widening",
+  "description": "Side A adds an OPTIONAL parameter with a default; side B keeps the single-arg call. Naive arity diff flags it; tsc must not.",
+  "predictions": [
+    {
+      "prediction_id": "ts-widening-optional-param-p0",
+      "conflict_class": "signature_changed",
+      "symbol_id": "src.models::User.greet",
+      "ref_path": "src/app.ts",
+      "anchor": "u.greet(\"Ada\")",
+      "resolution_status": "resolved"
+    }
+  ],
+  "expectation": {"ts-widening-optional-param-p0": "false_positive"},
+  "notes": "FP trap #1 (TS): optional-parameter widening is compatible."
+}

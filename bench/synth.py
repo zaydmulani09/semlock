@@ -645,5 +645,56 @@ def _ts_cases() -> tuple[SyntheticCase, ...]:
     )
 
 
+def load_adversarial_fixtures() -> tuple[SyntheticCase, ...]:
+    """Load FP-trap case families from tests/fixtures/adversarial/.
+
+    Each fixture directory carries states/{base,side_a,side_b} plus a
+    manifest.json whose predictions use the same schema as generated metas.
+    Expectations encode OBSERVED checker behavior at authoring time; they
+    validate the oracle, never grade SEMLock.
+    """
+    cases: list[SyntheticCase] = []
+    for manifest_path in sorted(ADVERSARIAL_FIXTURES.glob("*/manifest.json")):
+        fixture_dir = manifest_path.parent
+        document = json.loads(manifest_path.read_text(encoding="utf-8"))
+        states: dict[str, dict[str, str]] = {}
+        for layer in ("base", "side_a", "side_b"):
+            layer_dir = fixture_dir / "states" / layer
+            states[layer] = {
+                p.relative_to(layer_dir).as_posix(): p.read_text(encoding="utf-8")
+                for p in sorted(layer_dir.rglob("*"))
+                if p.is_file() and p.suffix != ".json"
+            }
+        planted = tuple(
+            PlantedRef(
+                conflict_class=p["conflict_class"],
+                symbol_id=p["symbol_id"],
+                ref_path=p["ref_path"],
+                anchor=p["anchor"],
+            )
+            for p in document.get("predictions", [])
+        )
+        # Map explicit manifest ids back to deterministic positional ids.
+        expectation_by_index: dict[str, str] = {}
+        for idx, p in enumerate(document.get("predictions", [])):
+            verdict = document.get("expectation", {}).get(p["prediction_id"])
+            if verdict is not None:
+                expectation_by_index[str(idx)] = verdict
+        cases.append(
+            SyntheticCase(
+                case_id=document["case_id"],
+                language=document["language"],
+                description=document["description"],
+                base=states["base"],
+                side_a=states["side_a"],
+                side_b=states["side_b"],
+                planted=planted,
+                expectation=expectation_by_index,
+                notes=document.get("notes", ""),
+            )
+        )
+    return tuple(cases)
+
+
 def write_all_builtin(workdir: Path) -> list[Path]:
     return [write_case(workdir, c) for c in builtin_cases()]

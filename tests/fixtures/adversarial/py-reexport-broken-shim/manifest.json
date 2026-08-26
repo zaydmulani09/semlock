@@ -1,0 +1,19 @@
+{
+  "case_id": "py-reexport-broken-shim",
+  "language": "python",
+  "family": "reexport_indirection",
+  "family_tag": "tp_reexport_shim_broken",
+  "description": "Same move as py-reexport-stable-api, but side A FORGOT to update pkg/__init__. The package API is genuinely broken; side B's package-path import must fail. Control case for the stable variant.",
+  "predictions": [
+    {
+      "prediction_id": "py-reexport-broken-shim-p0",
+      "conflict_class": "removed_export",
+      "symbol_id": "pkg.impl::format_greeting",
+      "ref_path": "pkg/app.py",
+      "anchor": "from pkg import format_greeting",
+      "resolution_status": "resolved"
+    }
+  ],
+  "expectation": {"py-reexport-broken-shim-p0": "true_positive"},
+  "notes": "TP control proving the oracle distinguishes stable re-export shims from broken ones."
+}
