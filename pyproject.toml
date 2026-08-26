@@ -12,7 +12,14 @@ license = { text = "MIT" }
 dependencies = [
     # Constitution §9: stdlib + tree-sitter (+ per-language grammars) only.
     # Grammar AST shapes pinned for INV-1 determinism; bumps re-run full suites.
-    "tree-sitter>=0.23,<0.27",
+    # tree-sitter core pinned to the 0.23.x series the grammar packages below
+    # were built/tested against (tree-sitter-python declares core~=0.22,
+    # tree-sitter-typescript declares core~=0.23); resolving core up to 0.26
+    # crossed an ABI generation the 0.23.x grammar wheels don't match and
+    # segfaulted intermittently on Linux (observed in CI, not reproducible on
+    # Windows) — never loosen this range without re-running the full suite on
+    # Linux, not just locally.
+    "tree-sitter>=0.23,<0.24",
     "tree-sitter-python>=0.23,<0.24",
     "tree-sitter-typescript>=0.23,<0.24",
 ]
