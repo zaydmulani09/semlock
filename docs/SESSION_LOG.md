@@ -59,3 +59,12 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
   docs/format/ (rule-authoring.md authored there per briefing), ratify
   ADR-0003 (graph-without-eval) + ADR-0004 (declarative registry), freeze
   schema/claim-graph.schema.json from the documented shape (export.py header).
+- 2026-08-26 S5: git layer + CLI + output writers landed — `semlock
+  check REFA REFB [--json]` / `graph REF` / `version`, exit codes 0/1/2;
+  three-way worktree fact collection per ADR-0006 (base+A+B, INV-6 gated);
+  text+JSON writers whose findings are byte-aligned with engine
+  conflict_to_dict (dumb-printer contract); real-engine path wired via
+  runtime feature detection; --inject-fixtures harness covers reporting
+  machinery until extractors land; e2e skeptical-engineer two-branch test.
+  Consumable now: installed `semlock` console script works from any cwd;
+  mocks/ is a lazy test-only dependency.
