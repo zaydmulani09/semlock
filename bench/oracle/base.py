@@ -79,15 +79,18 @@ class Prediction:
 class CaseContext:
     """Materialized states an Oracle evaluates against.
 
-    merged_dir is mandatory. counterfactual_dir (base branch with side B merged but
-    WITHOUT side A's change) enables contamination-free subtraction of pre-existing
-    errors; when absent the oracle must return INCONCLUSIVE rather than guess.
+    merged_dir is mandatory. counterfactual_dir (base branch with side B merged
+    but WITHOUT side A's change) enables contamination-free subtraction of
+    pre-existing errors; when absent the oracle must return INCONCLUSIVE rather
+    than guess. surface_paths lists the repo-relative files side A changed —
+    diagnostics inside them are A-internal and never confirm a consumer break.
     """
 
     case_id: str
     language: str
     merged_dir: Path
     counterfactual_dir: Path | None
+    surface_paths: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,15 +163,25 @@ class Oracle(ABC):
                 pred.prediction_id, Verdict.FALSE_POSITIVE, self.tool_name,
                 site_errors=(), interaction_errors=(), notes=tuple(notes),
             )
-        site_errors = tuple(
-            e for e in interaction if e.overlaps_site(pred)
+        site_errors = tuple(e for e in interaction if e.overlaps_site(pred))
+        chain_errors = tuple(
+            e
+            for e in interaction
+            if not e.overlaps_site(pred) and self.on_causal_chain(e, pred)
         )
-        if site_errors and any(
-            self.error_matches_class(e, pred.conflict_class) for e in site_errors
-        ):
+        confirming = tuple(
+            e
+            for e in (*site_errors, *chain_errors)
+            if self.error_matches_class(e, pred.conflict_class)
+        )
+        if confirming:
+            notes = [
+                f"confirmed via {'site' if site_errors else 'causal-chain'} errors"
+            ] + notes
             return OracleResult(
                 pred.prediction_id, Verdict.TRUE_POSITIVE, self.tool_name,
-                site_errors=site_errors, interaction_errors=interaction,
+                site_errors=site_errors or chain_errors,
+                interaction_errors=interaction,
                 notes=tuple(notes),
             )
         if site_errors:
@@ -190,6 +203,23 @@ class Oracle(ABC):
     @abstractmethod
     def error_matches_class(self, error: SiteError, conflict_class: str) -> bool:
         """Is this diagnostic the kind this conflict class would plant?"""
+
+    def on_causal_chain(
+        self, ctx: CaseContext, error: SiteError, pred: Prediction
+    ) -> bool:
+        """Does this off-site diagnostic still evidence THIS relationship?
+
+        Checkers localize some breaks to an intermediate re-export/shim line
+        rather than the consumer's use-site. An interaction error counts as on
+        the causal chain only when (a) its message names the specific symbol
+        whose surface changed (name-tethered, not "any error") and (b) it is
+        not inside side A's own changed files (A-internal noise).
+        """
+        short_name = pred.symbol_id.rsplit(".", 1)[-1]
+        return (
+            error.path not in ctx.surface_paths
+            and short_name in error.message
+        )
 
     def scan_breaks(self, ctx: CaseContext) -> tuple[SiteError, ...]:
         """Interaction-attributed diagnostics independent of any prediction.
