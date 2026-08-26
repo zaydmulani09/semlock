@@ -167,7 +167,7 @@ def test_resolution_coverage_reported_for_all_fixtures() -> None:
 
 def test_query_spec_compiles_against_grammar() -> None:
     import tree_sitter_typescript
-    from tree_sitter import Language, Parser, Query, QueryCursor
+    from tree_sitter import Language, Parser, Query
 
     scm_path = (
         REPO_ROOT
@@ -175,8 +175,8 @@ def test_query_spec_compiles_against_grammar() -> None:
     )
     scm = scm_path.read_text(encoding="utf-8")
     lang = Language(tree_sitter_typescript.language_typescript())
-    cursor = QueryCursor(Query(lang, scm))
+    query = Query(lang, scm)
     src = "export function hi(): void {}\nexport class A { b(): void {} }\n"
     tree = Parser(lang).parse(src.encode())
-    captures = cursor.captures(tree.root_node)
+    captures = query.captures(tree.root_node)
     assert {"function.def", "method.def"} <= set(captures)
