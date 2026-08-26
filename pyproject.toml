@@ -20,6 +20,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7", "mypy>=1.8", "ruff>=0.4"]
 
+[project.scripts]
+semlock = "semlock.cli.main:main"
+
 [tool.setuptools.packages.find]
 include = ["semlock*"]
 

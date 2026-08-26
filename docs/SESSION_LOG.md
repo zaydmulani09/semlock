@@ -36,3 +36,13 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
   commit 3931c38, a misnamed push; branch recovered as session/4-engine and the stale
   ref deleted). Verified: guard passes S4-authored docs/format + cli paths, passes
   S1-authored docs paths, fails out-of-row probes. ruff+mypy --strict+pytest (60) green.
+
+- 2026-08-25 S1: issue #8 cleared — action/ -> S5 ownership row (+CODEOWNERS),
+  [project.scripts] semlock = "semlock.cli.main:main" in pyproject (entry target
+  ships with S4's merge; setuptools does not require it to exist at install time),
+  ADR-0006 (three-way merge-base + detached temp worktrees) ratified from the
+  implemented+tested plumbing on session/4-engine. SESSION_LOG-append rights were
+  already granted via #10 (docs/SESSION_LOG.md is common). schema/
+  check-report.schema.json queued: S5 drives the shape from output/json_out.py once
+  it lands on main, S1 freezes. Verified: guard passes S5-authored action/ path,
+  fails out-of-row probe; ruff+mypy --strict+pytest (60) green.
