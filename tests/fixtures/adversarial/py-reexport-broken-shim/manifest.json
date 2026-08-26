@@ -2,8 +2,8 @@
   "case_id": "py-reexport-broken-shim",
   "language": "python",
   "family": "reexport_indirection",
-  "family_tag": "tp_reexport_shim_broken",
-  "description": "Same move as py-reexport-stable-api, but side A FORGOT to update pkg/__init__. The package API is genuinely broken; side B's package-path import must fail. Control case for the stable variant.",
+  "family_tag": "fp_a_self_inconsistent",
+  "description": "Same move as py-reexport-stable-api, but side A FORGOT to update pkg/__init__: side A is self-inconsistent BEFORE the merge. The shim error exists in the A-alone state, so the break is not merge-induced; a plain CI typecheck of branch A alone would catch it.",
   "predictions": [
     {
       "prediction_id": "py-reexport-broken-shim-p0",
@@ -14,6 +14,6 @@
       "resolution_status": "resolved"
     }
   ],
-  "expectation": {"py-reexport-broken-shim-p0": "true_positive"},
-  "notes": "TP control proving the oracle distinguishes stable re-export shims from broken ones."
+  "expectation": {"py-reexport-broken-shim-p0": "false_positive"},
+  "notes": "Oracle policy: TP requires the break to be NEW under the merge (interaction-subtracted). A-side self-breakage is a named FP category (fp_a_self_inconsistent) - SEMLock flagging it is a useful warning, tracked separately as consumer impact, never counted as precision."
 }

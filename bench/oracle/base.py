@@ -167,7 +167,7 @@ class Oracle(ABC):
         chain_errors = tuple(
             e
             for e in interaction
-            if not e.overlaps_site(pred) and self.on_causal_chain(e, pred)
+            if not e.overlaps_site(pred) and self.on_causal_chain(ctx, e, pred)
         )
         confirming = tuple(
             e
