@@ -36,7 +36,6 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
   commit 3931c38, a misnamed push; branch recovered as session/4-engine and the stale
   ref deleted). Verified: guard passes S4-authored docs/format + cli paths, passes
   S1-authored docs paths, fails out-of-row probes. ruff+mypy --strict+pytest (60) green.
-
 - 2026-08-25 S1: issue #8 cleared — action/ -> S5 ownership row (+CODEOWNERS),
   [project.scripts] semlock = "semlock.cli.main:main" in pyproject (entry target
   ships with S4's merge; setuptools does not require it to exist at install time),
@@ -46,3 +45,17 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
   check-report.schema.json queued: S5 drives the shape from output/json_out.py once
   it lands on main, S1 freezes. Verified: guard passes S5-authored action/ path,
   fails out-of-row probe; ruff+mypy --strict+pytest (60) green.
+- 2026-08-25 S4: semantic layer landed on session/4-engine — claim graph
+  build+export (byte-deterministic, version-gated, consumable without eval),
+  three-way ChangeSet (provides_delta ALWAYS mb->side), declarative rule registry
+  with all four rules, INV-2 choke (unresolved/ambiguous/external never match —
+  structural + guard layers, tested), dual-sided evidence + explanations.
+  FIRST CONFLICTS FLAGGED on mock resolved IR: 4/4 expected conflict triples hit,
+  clean-merge TN emits ZERO findings; 55 S4 tests green (ruff+mypy --strict clean
+  on semlock/graph+engine). Consumable NOW by S5: `Conflict` +
+  `conflict_to_dict()` fixed key order and `EvaluationResult.to_dict()`
+  (semlock/engine/evidence.py, evaluate.py); graph dump via
+  `claim_graph_to_json`. Asks to S1: extend S4 ownership row with
+  docs/format/ (rule-authoring.md authored there per briefing), ratify
+  ADR-0003 (graph-without-eval) + ADR-0004 (declarative registry), freeze
+  schema/claim-graph.schema.json from the documented shape (export.py header).
