@@ -58,6 +58,7 @@ rows:
       - "semlock/output/"
       - "semlock/config/"
       - "semlock/cache/"
+      - "action/"
   - session: S6
     branch_prefix: "session/6-"
     paths:

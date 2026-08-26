@@ -38,6 +38,7 @@
 /semlock/output/            @session-4 @session-5
 /semlock/config/            @session-5
 /semlock/cache/             @session-5
+/action/                    @session-5
 
 # S6: benchmarks + corpus
 /bench/                     @session-6
