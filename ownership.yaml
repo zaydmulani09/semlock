@@ -66,3 +66,6 @@ rows:
 common:
   # Anyone may add tests for their own subsystem; nobody edits another's implementation.
   - "tests/"
+  # Cross-session rule 17: every session appends its merge line. Appends only —
+  # rewriting or deleting other sessions' entries is an ownership violation.
+  - "docs/SESSION_LOG.md"
