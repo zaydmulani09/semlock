@@ -125,3 +125,27 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
   frozen-grammar id pattern + format_version stamp tests. 58 S2 tests green
   (97 total); ruff+mypy --strict clean. Consumable: unchanged seams, richer
   import evidence for S4's engine matching on target_id only.
+- 2026-08-25 S3 (session/3-typescript): TS extractor+resolver SPIKE landed —
+  parse real TS, resolution first-class per ADR-0008, five spike answers +
+  honesty-gate call in `semlock/extractors/typescript/README.md`.
+  Consumable: `TypeScriptExtractor` / `TypeScriptResolver` /
+  `measure_resolution` registered for "typescript"; ids are
+  `module_path::Qual.Name`, member refs bind to MEMBER's own id
+  (`src/models::Account.email`); fixtures conflict+clean x4 classes under
+  tests/fixtures/typescript/; 34 TS tests; coverage measured: 33/39 = 84.6%
+  on healthy sides, drops on broken heads are INV-2 by design.
+  BLOCKERS filed as interface-requests: #1 ownership row + ADR-0008,
+  #2 tree-sitter deps for pyproject, #3 Ref.module_specifier/imported_name
+  for the single 0.2.0 revision. docs/ is S1-owned — this line appended under
+  rule 17; S1 please ratify at merge.
+- 2026-08-25 S3 (session/3-typescript): REBASED on IR 0.2.0 freeze; resolver
+  wired to Ref.module_specifier/imported_name — specifier-directed binding,
+  barrel chains followed to ORIGINAL ids (INV-7), star-only members,
+  module-granular namespace/star targets (ADR-0008 §3), aliased + default
+  imports bind, calls resolve via their file's import bindings, externals
+  classified (node_modules / out-of-side). TS coverage RE-MEASURED:
+  healthy-side aggregate 33/39 = 84.6% -> 38/43 = 88.4% (grand all sides
+  58/71 = 81.7%); residuals are honest (stdlib instance methods; structurally-
+  typed member calls marked ambiguous). Full table:
+  semlock/extractors/typescript/README.md. 50 tests green; ruff+mypy strict
+  clean; determinism byte-identical across processes.
