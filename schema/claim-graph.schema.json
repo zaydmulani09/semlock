@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://semlock.local/schema/claim-graph.schema.json",
+  "title": "SEMLock Claim Graph (one changeset side)",
+  "description": "Frozen from semlock/graph/export.py::claim_graph_to_json (S4 shape, S1 schema). Property order mirrors S4's fixed key order. Deterministic export: nodes by id, depends_on by (path, span, name, target_id), inherits by (child_id, base_name), members by name; UTF-8, 2-space indent, trailing newline. See docs/adr/0003-claim-graph-exportable.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format_version", "ir_format_version", "ref", "nodes", "depends_on", "inherits"],
+  "properties": {
+    "format_version": { "const": "0.1.0", "description": "claim-graph wire format (semlock.graph.export.CLAIM_GRAPH_FORMAT_VERSION)" },
+    "ir_format_version": { "const": "0.2.0", "description": "IR the facts were built from; must equal semlock.ir.version.FORMAT_VERSION" },
+    "ref": { "type": "string", "minLength": 1 },
+    "nodes": { "type": "array", "items": { "$ref": "#/$defs/symbol_node" } },
+    "depends_on": { "type": "array", "items": { "$ref": "#/$defs/dependency_edge" } },
+    "inherits": { "type": "array", "items": { "$ref": "#/$defs/inheritance_edge" } }
+  },
+  "$defs": {
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_line", "start_col", "end_line", "end_col"],
+      "properties": {
+        "start_line": { "type": "integer", "minimum": 1 },
+        "start_col": { "type": "integer", "minimum": 0 },
+        "end_line": { "type": "integer", "minimum": 1 },
+        "end_col": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "param": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "position", "kind", "type_annotation", "has_default"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "position": { "type": "integer", "minimum": 0 },
+        "kind": { "enum": ["positional", "keyword_only", "varargs", "kwargs"] },
+        "type_annotation": { "type": ["string", "null"] },
+        "has_default": { "type": "boolean" }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["params", "return_type"],
+      "properties": {
+        "params": { "type": "array", "items": { "$ref": "#/$defs/param" } },
+        "return_type": { "type": ["string", "null"] }
+      }
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type_annotation", "span"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "type_annotation": { "type": ["string", "null"] },
+        "span": { "$ref": "#/$defs/span" }
+      }
+    },
+    "symbol_node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "kind", "exports", "source_path", "span", "bases", "signature", "members"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[^:]+::[^:]+$", "description": "<module_path>::<qualified_name>; member nodes bind via <class_id>.<member> in target_id space" },
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["function", "method", "class", "interface", "type_alias", "variable"] },
+        "exports": { "type": "boolean" },
+        "source_path": { "type": "string", "minLength": 1 },
+        "span": { "$ref": "#/$defs/span" },
+        "bases": { "type": "array", "items": { "type": "string" } },
+        "signature": { "oneOf": [{ "$ref": "#/$defs/signature" }, { "type": "null" }] },
+        "members": { "type": "array", "items": { "$ref": "#/$defs/member" } }
+      }
+    },
+    "dependency_edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "name", "kind", "status", "target_id", "span"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "description": "file containing the use-site" },
+        "name": { "type": "string", "minLength": 1, "description": "use-site evidence as written; engine matches on target_id only" },
+        "kind": { "enum": ["call", "read", "write", "import", "attribute"] },
+        "status": { "enum": ["unresolved", "resolved", "external", "ambiguous"] },
+        "target_id": {
+          "type": ["string", "null"],
+          "pattern": "^([^:]+::[^:]+|[^:]+)$",
+          "description": "symbol id, member id (<module>::Owner.member), or bare module_path for module-granular deps"
+        },
+        "span": { "$ref": "#/$defs/span" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "resolved" } }, "required": ["status"] },
+          "then": { "properties": { "target_id": { "type": "string", "minLength": 1 } }, "required": ["status", "target_id"] }
+        },
+        {
+          "if": { "properties": { "status": { "enum": ["unresolved", "external", "ambiguous"] } }, "required": ["status"] },
+          "then": { "properties": { "target_id": { "type": "null" } } }
+        }
+      ]
+    },
+    "inheritance_edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["child_id", "base_name"],
+      "properties": {
+        "child_id": { "type": "string", "pattern": "^[^:]+::[^:]+$" },
+        "base_name": { "type": "string", "minLength": 1, "description": "base name AS WRITTEN (v1 resolver does not bind base names to ids)" }
+      }
+    }
+  }
+}

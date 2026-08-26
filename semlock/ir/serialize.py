@@ -98,10 +98,10 @@ def _validate(
     if "allOf" in schema:
         for sub in schema["allOf"]:
             errors.extend(_validate(value, sub, root, where))
-        if "if" in schema:
-            if not _validate(value, schema["if"], root, where):
-                if "then" in schema:
-                    errors.extend(_validate(value, schema["then"], root, where))
+
+    if "if" in schema and not _validate(value, schema["if"], root, where):
+        if "then" in schema:
+            errors.extend(_validate(value, schema["then"], root, where))
 
     declared = schema.get("type")
     types = [declared] if isinstance(declared, str) else (declared or [])

@@ -1,0 +1,203 @@
+{
+  "format_version": "0.1.0",
+  "ir_format_version": "0.2.0",
+  "ref": "feat/app",
+  "nodes": [
+    {
+      "id": "pkg.app::welcome",
+      "name": "welcome",
+      "kind": "function",
+      "exports": true,
+      "source_path": "pkg/app.py",
+      "span": {
+        "start_line": 3,
+        "start_col": 0,
+        "end_line": 6,
+        "end_col": 41
+      },
+      "bases": [],
+      "signature": {
+        "params": [
+          {
+            "name": "user",
+            "position": 0,
+            "kind": "positional",
+            "type_annotation": "User",
+            "has_default": false
+          }
+        ],
+        "return_type": "str"
+      },
+      "members": []
+    },
+    {
+      "id": "pkg.models::User",
+      "name": "User",
+      "kind": "class",
+      "exports": true,
+      "source_path": "pkg/models.py",
+      "span": {
+        "start_line": 3,
+        "start_col": 0,
+        "end_line": 12,
+        "end_col": 34
+      },
+      "bases": [],
+      "signature": null,
+      "members": [
+        {
+          "name": "email",
+          "type_annotation": "str | None",
+          "span": {
+            "start_line": 6,
+            "start_col": 4,
+            "end_line": 6,
+            "end_col": 27
+          }
+        }
+      ]
+    },
+    {
+      "id": "pkg.models::User.greet",
+      "name": "greet",
+      "kind": "method",
+      "exports": false,
+      "source_path": "pkg/models.py",
+      "span": {
+        "start_line": 8,
+        "start_col": 4,
+        "end_line": 9,
+        "end_col": 34
+      },
+      "bases": [],
+      "signature": {
+        "params": [
+          {
+            "name": "self",
+            "position": 0,
+            "kind": "positional",
+            "type_annotation": null,
+            "has_default": false
+          },
+          {
+            "name": "name",
+            "position": 1,
+            "kind": "positional",
+            "type_annotation": "str",
+            "has_default": false
+          }
+        ],
+        "return_type": "str"
+      },
+      "members": []
+    },
+    {
+      "id": "pkg.models::format_greeting",
+      "name": "format_greeting",
+      "kind": "function",
+      "exports": true,
+      "source_path": "pkg/models.py",
+      "span": {
+        "start_line": 11,
+        "start_col": 0,
+        "end_line": 12,
+        "end_col": 34
+      },
+      "bases": [],
+      "signature": {
+        "params": [
+          {
+            "name": "user",
+            "position": 0,
+            "kind": "positional",
+            "type_annotation": "User",
+            "has_default": false
+          }
+        ],
+        "return_type": "str"
+      },
+      "members": []
+    }
+  ],
+  "depends_on": [
+    {
+      "path": "pkg/app.py",
+      "name": "User",
+      "kind": "import",
+      "status": "resolved",
+      "target_id": "pkg.models::User",
+      "span": {
+        "start_line": 1,
+        "start_col": 20,
+        "end_line": 1,
+        "end_col": 24
+      }
+    },
+    {
+      "path": "pkg/app.py",
+      "name": "format_greeting",
+      "kind": "import",
+      "status": "resolved",
+      "target_id": "pkg.models::format_greeting",
+      "span": {
+        "start_line": 1,
+        "start_col": 26,
+        "end_line": 1,
+        "end_col": 41
+      }
+    },
+    {
+      "path": "pkg/app.py",
+      "name": "greet",
+      "kind": "call",
+      "status": "resolved",
+      "target_id": "pkg.models::User.greet",
+      "span": {
+        "start_line": 4,
+        "start_col": 14,
+        "end_line": 4,
+        "end_col": 33
+      }
+    },
+    {
+      "path": "pkg/app.py",
+      "name": "format_greeting",
+      "kind": "call",
+      "status": "resolved",
+      "target_id": "pkg.models::format_greeting",
+      "span": {
+        "start_line": 5,
+        "start_col": 13,
+        "end_line": 5,
+        "end_col": 32
+      }
+    },
+    {
+      "path": "pkg/app.py",
+      "name": "email",
+      "kind": "attribute",
+      "status": "resolved",
+      "target_id": "pkg.models::User.email",
+      "span": {
+        "start_line": 6,
+        "start_col": 15,
+        "end_line": 6,
+        "end_col": 25
+      }
+    },
+    {
+      "path": "pkg/models.py",
+      "name": "greet",
+      "kind": "call",
+      "status": "resolved",
+      "target_id": "pkg.models::User.greet",
+      "span": {
+        "start_line": 12,
+        "start_col": 11,
+        "end_line": 12,
+        "end_col": 29
+      }
+    }
+  ],
+  "inherits": []
+}
