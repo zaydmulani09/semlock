@@ -25,14 +25,17 @@
 /tests/unit/typescript/         @session-3
 /tests/fixtures/typescript/     @session-3
 
-# S4: graph + conflict engine
+# S4: graph + conflict engine (+ rule-format docs per ADR-0004)
 /semlock/graph/             @session-4
 /semlock/engine/            @session-4
+# GitHub CODEOWNERS is LAST-match-wins: keep this specific rule AFTER /docs/.
+/docs/format/               @session-4
 
-# S5: git/cli/output/config/cache
-/semlock/git/               @session-5
-/semlock/cli/               @session-5
-/semlock/output/            @session-5
+# S5: git/cli/output/config/cache — git|cli|output are TEMPORARY co-ownership with
+# S4 (see ownership.yaml arbitration note); expires at S5's first landing.
+/semlock/git/               @session-4 @session-5
+/semlock/cli/               @session-4 @session-5
+/semlock/output/            @session-4 @session-5
 /semlock/config/            @session-5
 /semlock/cache/             @session-5
 

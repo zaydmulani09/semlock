@@ -1,5 +1,10 @@
 # SEMLock path ownership. CI enforces this (see .github/workflows/ and ownership_guard.py).
 # A session may only modify paths in its row (or paths marked owner: common).
+#
+# Precedence note: the guard matches a PR against ONLY its own branch-prefix row
+# (+ common), so cross-row ordering is irrelevant to enforcement. Specificity within
+# CODEOWNERS follows GitHub semantics (last matching line wins); keep specific rules
+# (e.g. /docs/format/) AFTER general ones (e.g. /docs/).
 # Schema of one row: session, branch_prefix, paths.
 rows:
   - session: S1
@@ -31,15 +36,20 @@ rows:
       - "semlock/resolution/"
       - "tests/unit/typescript/"
       - "tests/fixtures/typescript/"
-  - session: S3
-    branch_prefix: "session/3-"
-    paths:
-      - "semlock/resolution/"
+  # S4 TEMPORARY CO-OWNERSHIP (S1 arbitration, 2026-08-25): the semlock/git|cli|output
+  # entries below EXPIRE when S5 lands its first PR touching those packages; afterwards
+  # S4 needs a fresh ADR to modify them. Reason: S4 bootstraps the pipeline end-to-end
+  # and origin/session/5-git-cli proved byte-identical to S4's work (misnamed push) —
+  # no competing S5 implementation existed.
   - session: S4
     branch_prefix: "session/4-"
     paths:
       - "semlock/graph/"
       - "semlock/engine/"
+      - "docs/format/"
+      - "semlock/git/"
+      - "semlock/cli/"
+      - "semlock/output/"
   - session: S5
     branch_prefix: "session/5-"
     paths:

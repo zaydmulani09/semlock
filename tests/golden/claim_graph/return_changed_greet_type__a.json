@@ -1,0 +1,97 @@
+{
+  "format_version": "0.1.0",
+  "ir_format_version": "0.2.0",
+  "ref": "feat/greeting-surface",
+  "nodes": [
+    {
+      "id": "pkg.models::User",
+      "name": "User",
+      "kind": "class",
+      "exports": true,
+      "source_path": "pkg/models.py",
+      "span": {
+        "start_line": 3,
+        "start_col": 0,
+        "end_line": 12,
+        "end_col": 34
+      },
+      "bases": [],
+      "signature": null,
+      "members": [
+        {
+          "name": "email",
+          "type_annotation": "str | None",
+          "span": {
+            "start_line": 6,
+            "start_col": 4,
+            "end_line": 6,
+            "end_col": 27
+          }
+        }
+      ]
+    },
+    {
+      "id": "pkg.models::User.greet",
+      "name": "greet",
+      "kind": "method",
+      "exports": false,
+      "source_path": "pkg/models.py",
+      "span": {
+        "start_line": 8,
+        "start_col": 4,
+        "end_line": 9,
+        "end_col": 34
+      },
+      "bases": [],
+      "signature": {
+        "params": [
+          {
+            "name": "self",
+            "position": 0,
+            "kind": "positional",
+            "type_annotation": null,
+            "has_default": false
+          },
+          {
+            "name": "name",
+            "position": 1,
+            "kind": "positional",
+            "type_annotation": "str",
+            "has_default": false
+          }
+        ],
+        "return_type": "GreetingResult"
+      },
+      "members": []
+    },
+    {
+      "id": "pkg.models::format_greeting",
+      "name": "format_greeting",
+      "kind": "function",
+      "exports": true,
+      "source_path": "pkg/models.py",
+      "span": {
+        "start_line": 11,
+        "start_col": 0,
+        "end_line": 12,
+        "end_col": 34
+      },
+      "bases": [],
+      "signature": {
+        "params": [
+          {
+            "name": "user",
+            "position": 0,
+            "kind": "positional",
+            "type_annotation": "User",
+            "has_default": false
+          }
+        ],
+        "return_type": "str"
+      },
+      "members": []
+    }
+  ],
+  "depends_on": [],
+  "inherits": []
+}
