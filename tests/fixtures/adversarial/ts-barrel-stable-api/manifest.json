@@ -1,0 +1,19 @@
+{
+  "case_id": "ts-barrel-stable-api",
+  "language": "typescript",
+  "family": "reexport_indirection",
+  "family_tag": "fp_reexport_api_stable",
+  "description": "Side A moves formatGreeting into a legacy module but keeps the barrel (src/index.ts) API surface identical. Side B imports through the barrel: no break.",
+  "predictions": [
+    {
+      "prediction_id": "ts-barrel-stable-api-p0",
+      "conflict_class": "removed_export",
+      "symbol_id": "src.models::formatGreeting",
+      "ref_path": "src/app.ts",
+      "anchor": "import { formatGreeting",
+      "resolution_status": "resolved"
+    }
+  ],
+  "expectation": {"ts-barrel-stable-api-p0": "false_positive"},
+  "notes": "FP trap #3 (TS): barrel indirection keeps the public API stable across an internal move."
+}

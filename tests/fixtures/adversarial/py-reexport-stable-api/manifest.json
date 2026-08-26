@@ -1,0 +1,19 @@
+{
+  "case_id": "py-reexport-stable-api",
+  "language": "python",
+  "family": "reexport_indirection",
+  "family_tag": "fp_reexport_api_stable",
+  "description": "Side A moves format_greeting from impl.py to impl2.py but keeps the package API (pkg/__init__ re-export updated). Side B imports via the package path. Public surface unchanged: no break.",
+  "predictions": [
+    {
+      "prediction_id": "py-reexport-stable-api-p0",
+      "conflict_class": "removed_export",
+      "symbol_id": "pkg.impl::format_greeting",
+      "ref_path": "pkg/app.py",
+      "anchor": "from pkg import format_greeting",
+      "resolution_status": "resolved"
+    }
+  ],
+  "expectation": {"py-reexport-stable-api-p0": "false_positive"},
+  "notes": "FP trap #3: file-level matching flags impl.py's loss; API-level truth is stability. Companion control: py-reexport-broken-shim."
+}

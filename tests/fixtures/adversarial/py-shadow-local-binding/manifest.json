@@ -1,0 +1,19 @@
+{
+  "case_id": "py-shadow-local-binding",
+  "language": "python",
+  "family": "resolution_error",
+  "family_tag": "fp_shadow_misresolution",
+  "description": "Side B defines its OWN format_greeting and never imports the one side A deletes. A name-based resolver wrongly binds B's call to pkg.models::format_greeting and predicts a break; the truth is no break.",
+  "predictions": [
+    {
+      "prediction_id": "py-shadow-local-binding-p0",
+      "conflict_class": "removed_export",
+      "symbol_id": "pkg.models::format_greeting",
+      "ref_path": "pkg/app.py",
+      "anchor": "return format_greeting(user)",
+      "resolution_status": "resolved"
+    }
+  ],
+  "expectation": {"py-shadow-local-binding-p0": "false_positive"},
+  "notes": "FP trap #2: same-name local binding must not be resolved to the deleted export. Tests RESOLUTION precision, not just rule correctness."
+}

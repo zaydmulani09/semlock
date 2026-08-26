@@ -1,0 +1,81 @@
+# SEMLock benchmark corpus sources (S6-owned, build-time only).
+#
+# Mining uses the GitHub API with a free personal token supplied via the
+# SEMLOCK_GITHUB_TOKEN environment variable at BUILD time. Nothing here runs
+# inside the shipped product (INV-7: local purity of the correctness path).
+#
+# Selection criteria (fixed before scoring; changes require S6 sign-off and a
+# full re-run — Constitution §8.5):
+#   - actively merged PR history (recent merges within the last year)
+#   - moderate size (>= 50 PRs/year, < 500k LOC) to keep oracle runtime sane
+#   - Python rows must be type-annotated enough for mypy to be meaningful;
+#     TS rows should compile under strict tsc or are recorded type-dirty
+#   - spread across domains to avoid single-domain bias
+#
+# Fields:
+#   repo        GitHub owner/name
+#   language    python | typescript
+#   module_dirs source roots where cross-file symbol surfaces live
+#   exclude     path globs skipped by mining (tests, fixtures, vendored code)
+#   notes       caveats that affect grading interpretation
+
+repos:
+  - repo: encode/httpx
+    language: python
+    module_dirs: ["httpx"]
+    exclude: ["tests/**", "docs/**"]
+    notes: heavily typed public API surface; good removed_export hunting
+
+  - repo: textualize/rich
+    language: python
+    module_dirs: ["rich"]
+    exclude: ["tests/**", "docs/**", "examples/**"]
+    notes: partial annotations; expect higher inconclusive rate
+
+  - repo: fastapi/fastapi
+    language: python
+    module_dirs: ["fastapi"]
+    exclude: ["tests/**", "docs/**", "scripts/**"]
+    notes: large annotated surface; signature_changed candidates frequent
+
+  - repo: pydantic/pydantic
+    language: python
+    module_dirs: ["pydantic"]
+    exclude: ["tests/**", "docs/**"]
+    notes: strict typing culture; low tolerance for dirty baselines
+
+  - repo: pytest-dev/pytest
+    language: python
+    module_dirs: ["src/_pytest"]
+    exclude: ["testing/**", "doc/**"]
+    notes: src-layout; module_dirs reflect that
+
+  - repo: pallets/click
+    language: python
+    module_dirs: ["src/click"]
+    exclude: ["tests/**", "docs/**"]
+    notes: compact API; useful control repo for mining precision
+
+  - repo: colinhacks/zod
+    language: typescript
+    module_dirs: ["src"]
+    exclude: ["tests/**", "**/*.test.ts"]
+    notes: strict tsc; TS-side anchor for S3 resolution-strength question
+
+  - repo: axios/axios
+    language: typescript
+    module_dirs: ["lib"]
+    exclude: ["test/**", "dist/**", "examples/**"]
+    notes: mixed JS/TS; miner must filter to .ts files only
+
+  - repo: vitest-dev/vitest
+    language: typescript
+    module_dirs: ["packages/vitest/src"]
+    exclude: ["**/*.test.ts", "test/**", "docs/**"]
+    notes: workspace layout; large inter-package import graph
+
+  - repo: hapijs/joi
+    language: typescript
+    module_dirs: ["lib"]
+    exclude: ["test/**", "types/**"]
+    notes: lib is TS with d.ts alongside; verify strictness before scoring
