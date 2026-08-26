@@ -12,7 +12,9 @@ INV-2/INV-8 honesty rules encoded here:
 
 No static import of semlock.engine anywhere: the engine may be absent (CI
 before S4 lands). The engine path adapts runtime objects duck-typed by
-ConflictLike.
+ConflictLike. Likewise NO import of mocks/ here — the installed console script
+must run without a repository checkout; fixture enrichment lives in
+semlock.cli.mock_pipeline (lazy-imported, test-only).
 """
 from __future__ import annotations
 
@@ -20,8 +22,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, Final, Literal, Protocol
 
-from mocks import conflict_fixtures as cf
-from mocks.changeset_fixtures import ChangesetScenario
 from semlock.ir.model import FileFacts, Ref, Span, Symbol
 
 REPORT_FORMAT_VERSION: Final = "0.1.0"
@@ -243,57 +243,3 @@ def locate_consumer(
         candidates, key=lambda item: (_ref_sort_key(item[1]), item[0])
     )
     return best_path, best_ref
-
-
-def findings_from_scenario(
-    scenario: ChangesetScenario,
-    side_a: tuple[FileFacts, ...],
-    side_b: tuple[FileFacts, ...],
-) -> tuple[Finding, ...]:
-    """Ground-truth expectations + fixture facts -> enriched Findings.
-
-    The scenario's EXPECTED_CONFLICTS are S1-authored ground truth for what a
-    correct engine emits; this function adds file:line evidence by looking ids
-    and ref names up in the corresponding resolved fact sets. Fixtures describe
-    the canonical orientation (A mutates a surface; B consumes it).
-    """
-    expected = cf.expected_for(scenario.name)
-    findings: list[Finding] = []
-    for exp in expected:
-        changed_hit = locate_symbol(side_a, exp.changed_symbol_id)
-        consumer_hit = locate_consumer(side_b, exp.consumer_ref_name)
-
-        consumer_path = consumer_hit[0] if consumer_hit else None
-        consumer_ref = consumer_hit[1] if consumer_hit else None
-        changed_path = changed_hit[0] if changed_hit else None
-        changed_line = changed_hit[1].span.start_line if changed_hit else None
-        changed_col = changed_hit[1].span.start_col if changed_hit else None
-
-        findings.append(
-            Finding(
-                rule=exp.conflict_class,  # fixture granularity: rule == class
-                conflict_class=exp.conflict_class,
-                changed_symbol_id=exp.changed_symbol_id,
-                changed_side="A",
-                consumer_ref_name=exp.consumer_ref_name,
-                consumer_ref_kind=consumer_ref.kind if consumer_ref else "?",
-                consumer_path=consumer_path,
-                consumer_span=consumer_ref.span if consumer_ref else None,
-                consumer_side="B",
-                target_id=exp.changed_symbol_id,
-                explanation=exp.note,
-                evidence_a=SideEvidence(
-                    path=changed_path,
-                    line=changed_line,
-                    col=changed_col,
-                    role=ROLE_CHANGED,
-                ),
-                evidence_b=SideEvidence(
-                    path=consumer_path,
-                    line=consumer_ref.span.start_line if consumer_ref else None,
-                    col=consumer_ref.span.start_col if consumer_ref else None,
-                    role=ROLE_CONSUMER,
-                ),
-            )
-        )
-    return tuple(sorted(findings, key=Finding.sort_key))

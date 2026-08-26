@@ -15,7 +15,6 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from semlock.cli import mock_pipeline
 from semlock.git import extract_at_ref, refs
 from semlock.ir.version import FORMAT_VERSION
 from semlock.output import findings as findings_mod
@@ -166,8 +165,16 @@ def _cmd_check(args: argparse.Namespace) -> int:
     findings: tuple[Finding, ...]
     engine_stats: dict[str, Any] | None = None
     if args.inject_fixtures is not None:
+        # Lazy, test-only: mocks/ ships in repository checkouts, not wheels.
         try:
+            from semlock.cli import mock_pipeline
+
             scenario = mock_pipeline.load_scenario(args.inject_fixtures)
+        except ImportError:
+            return _fail(
+                "--inject-fixtures requires a repository checkout "
+                "(mocks/ is a test-only fixture tree)"
+            )
         except KeyError as exc:
             return _fail(str(exc.args[0]))
         findings = mock_pipeline.scenario_findings(scenario)
