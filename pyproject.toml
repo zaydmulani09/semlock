@@ -17,6 +17,10 @@ dependencies = [
     "tree-sitter-typescript>=0.23,<0.24",
 ]
 
+[project.scripts]
+# S5 arbitration (#8): `semlock` console entry — fresh-clone install criterion.
+semlock = "semlock.cli.main:main"
+
 [project.optional-dependencies]
 dev = ["pytest>=7", "mypy>=1.8", "ruff>=0.4"]
 

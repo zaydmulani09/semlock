@@ -48,6 +48,7 @@ rows:
       - "semlock/output/"
       - "semlock/config/"
       - "semlock/cache/"
+      - "action/"
   - session: S6
     branch_prefix: "session/6-"
     paths:
@@ -56,3 +57,6 @@ rows:
 common:
   # Anyone may add tests for their own subsystem; nobody edits another's implementation.
   - "tests/"
+  # Rule 17 (all sessions append one line per merge) — the log itself is common;
+  # substantive docs/ edits stay S1-owned.
+  - "docs/SESSION_LOG.md"

@@ -29,12 +29,13 @@
 /semlock/graph/             @session-4
 /semlock/engine/            @session-4
 
-# S5: git/cli/output/config/cache
+# S5: git/cli/output/config/cache + GitHub Action
 /semlock/git/               @session-5
 /semlock/cli/               @session-5
 /semlock/output/            @session-5
 /semlock/config/            @session-5
 /semlock/cache/             @session-5
+/action/                    @session-5
 
 # S6: benchmarks + corpus
 /bench/                     @session-6
