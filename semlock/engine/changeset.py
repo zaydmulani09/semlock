@@ -111,7 +111,19 @@ class SurfaceChange:
 
 @dataclass(frozen=True, slots=True)
 class ChangeSet:
-    """Three-way semantic diff. Deltas are ALWAYS mb -> side (never side vs side)."""
+    """Three-way semantic diff. Deltas are ALWAYS mb -> side (never side vs side).
+
+    `changed_paths_a`/`changed_paths_b`: each side's git-diff-changed paths
+    relative to the merge-base (ADR-0006's three-dot diff), when the caller
+    has git context to provide them. `None` means "unknown" — evaluate()
+    then applies no inherited-file filtering for that side, exactly matching
+    pre-existing behavior (mock/fixture callers that never had git context
+    are unaffected). When both are known, evaluate() excludes a dependency
+    edge whose file the consumer never touched but the provider did: post-
+    merge that file is entirely the provider's own (already self-consistent)
+    version, not a stale copy the consumer genuinely depends on — regardless
+    of whether it's the exact file the provider's symbol change lives in or
+    some other file the same PR also touched."""
 
     base_ref: str
     a_ref: str
@@ -121,6 +133,8 @@ class ChangeSet:
     b_graph: ClaimGraph
     provides_delta_a: tuple[SurfaceChange, ...]
     provides_delta_b: tuple[SurfaceChange, ...]
+    changed_paths_a: frozenset[str] | None = None
+    changed_paths_b: frozenset[str] | None = None
 
 
 def diff_graphs(base: ClaimGraph, head: ClaimGraph) -> tuple[SurfaceChange, ...]:
@@ -204,36 +218,65 @@ def _change_sort_key(change: SurfaceChange) -> tuple[str, int]:
     return (change.symbol_id, _KIND_ORDER[change.kind])
 
 
+def _is_compatible_widening(old: str | None, new: str | None) -> bool:
+    """True when `new` textually widens `old` to also accept None, so a
+    caller passing the old-typed value still satisfies the new annotation
+    (str -> str | None / Optional[str]). Conservative text patterns only —
+    Constitution §3 rules out real type inference; this recognizes the
+    written form, nothing else."""
+    if old is None or new is None or old == new:
+        return False
+    return new in (f"{old} | None", f"None | {old}", f"Optional[{old}]")
+
+
 def _params_delta(before: SymbolSnapshot, after: SymbolSnapshot) -> str | None:
-    """Param-surface diff text, or None when unchanged OR incomparable (INV-8:
-    a missing Signature on either side means we cannot know the old form)."""
+    """Param-surface diff text, or None when unchanged, incomparable (INV-8:
+    a missing Signature on either side means we cannot know the old form), or
+    proven backward-compatible: a new TRAILING param with a default (existing
+    callers omitting it still work) or a param's type widened to also accept
+    None (existing callers passing the old type still satisfy the new one)."""
     if before.signature is None or after.signature is None:
         return None
     old_p, new_p = before.params, after.params
     if old_p == new_p:
         return None
     parts: list[str] = []
-    if len(old_p) != len(new_p):
-        parts.append(f"count {len(old_p)} -> {len(new_p)}")
+    breaking = False
     for i in range(max(len(old_p), len(new_p))):
         o = old_p[i] if i < len(old_p) else None
         n = new_p[i] if i < len(new_p) else None
         if o is None:
-            if n is not None:
-                parts.append(f"position {i}: added '{n.name}'")
+            assert n is not None
+            if n.has_default:
+                continue  # compatible: existing callers can omit it
+            parts.append(f"position {i}: added '{n.name}'")
+            breaking = True
             continue
         if n is None:
             parts.append(f"position {i}: removed '{o.name}'")
+            breaking = True
             continue
         if o.name != n.name:
             parts.append(f"position {i}: '{o.name}' -> '{n.name}'")
-        elif o != n:
-            fields = [
-                f"{f}: {getattr(o, f)!r} -> {getattr(n, f)!r}"
-                for f in ("kind", "type_annotation", "has_default")
-                if getattr(o, f) != getattr(n, f)
-            ]
-            parts.append(f"position {i} ({o.name}): " + ", ".join(fields))
+            breaking = True
+            continue
+        if o == n:
+            continue
+        if (
+            o.kind == n.kind
+            and o.has_default == n.has_default
+            and _is_compatible_widening(o.type_annotation, n.type_annotation)
+        ):
+            continue
+        fields = [
+            f"{f}: {getattr(o, f)!r} -> {getattr(n, f)!r}"
+            for f in ("kind", "type_annotation", "has_default")
+            if getattr(o, f) != getattr(n, f)
+        ]
+        parts.append(f"position {i} ({o.name}): " + ", ".join(fields))
+        breaking = True
+    if not breaking:
+        return None
     joined = "; ".join(p for p in parts if p)
     return f"parameters changed: {joined}"
 
@@ -281,8 +324,16 @@ def build_changeset(
     base_files: tuple[FileFacts, ...],
     a_files: tuple[FileFacts, ...],
     b_files: tuple[FileFacts, ...],
+    changed_paths_a: frozenset[str] | None = None,
+    changed_paths_b: frozenset[str] | None = None,
 ) -> ChangeSet:
-    """Build all three claim graphs and their mb->side deltas (version-gated)."""
+    """Build all three claim graphs and their mb->side deltas (version-gated).
+
+    `changed_paths_a`/`changed_paths_b` are optional git-diff-changed path
+    sets (base->side, three-dot) that let evaluate() distinguish a side's
+    genuinely-edited files from files it merely inherited unchanged from the
+    merge-base — see ChangeSet's docstring and evaluate()'s same-file
+    inheritance filter."""
     base_graph = build_claim_graph(base_files)
     a_graph = build_claim_graph(a_files)
     b_graph = build_claim_graph(b_files)
@@ -295,4 +346,6 @@ def build_changeset(
         b_graph=b_graph,
         provides_delta_a=diff_graphs(base_graph, a_graph),
         provides_delta_b=diff_graphs(base_graph, b_graph),
+        changed_paths_a=changed_paths_a,
+        changed_paths_b=changed_paths_b,
     )

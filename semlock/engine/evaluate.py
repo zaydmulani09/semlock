@@ -35,6 +35,7 @@ class EvaluationStats:
     deps_chocked: int
     changes_considered: int
     pairings_evaluated: int
+    deps_same_file_inherited: int = 0
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,7 @@ class EvaluationResult:
                 "deps_chocked": self.stats.deps_chocked,
                 "changes_considered": self.stats.changes_considered,
                 "pairings_evaluated": self.stats.pairings_evaluated,
+                "deps_same_file_inherited": self.stats.deps_same_file_inherited,
             },
         }
 
@@ -87,10 +89,20 @@ def evaluate(
     )
     changes_considered = 0
     pairings = 0
+    same_file_inherited = 0
 
-    for provider, consumer, delta, index in (
-        ("A", "B", changeset.provides_delta_a, index_b),
-        ("B", "A", changeset.provides_delta_b, index_a),
+    for (
+        provider, consumer, delta, index,
+        provider_changed_paths, consumer_changed_paths,
+    ) in (
+        (
+            "A", "B", changeset.provides_delta_a, index_b,
+            changeset.changed_paths_a, changeset.changed_paths_b,
+        ),
+        (
+            "B", "A", changeset.provides_delta_b, index_a,
+            changeset.changed_paths_b, changeset.changed_paths_a,
+        ),
     ):
         assert provider in ("A", "B") and consumer in ("A", "B")
         ctx = RuleContext(
@@ -109,6 +121,22 @@ def evaluate(
                 continue  # additions break nobody
             changes_considered += 1
             for dep in index.get(change.symbol_id, ()):
+                if (
+                    consumer_changed_paths is not None
+                    and provider_changed_paths is not None
+                    and dep.path not in consumer_changed_paths
+                    and dep.path in provider_changed_paths
+                ):
+                    # Consumer's own git diff never touched this file, but
+                    # the provider's did: post-merge (consumer contributed
+                    # nothing here, so git takes the provider's whole file,
+                    # no conflict) this file is entirely the provider's
+                    # already-self-consistent version, not a stale copy the
+                    # consumer genuinely depends on. When the provider ALSO
+                    # never touched it, it's untouched by both sides and a
+                    # real cross-branch dependency — never excluded.
+                    same_file_inherited += 1
+                    continue
                 for rule in rules:
                     pairings += 1
                     conflict = rule.evaluate(change, dep, ctx)
@@ -122,6 +150,7 @@ def evaluate(
         deps_chocked=deps_total - eligible_count,
         changes_considered=changes_considered,
         pairings_evaluated=pairings,
+        deps_same_file_inherited=same_file_inherited,
     )
     return EvaluationResult(conflicts=ordered, stats=stats)
 

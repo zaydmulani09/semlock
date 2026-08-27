@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 from builders import facts, member, param, ref, sig, symbol
 
+from semlock.engine import evaluate
 from semlock.engine.changeset import build_changeset, diff_graphs
 from semlock.graph import build_claim_graph
 
@@ -126,6 +127,69 @@ def test_ref_kinds_survive_into_graphs() -> None:
     assert cs.a_graph.dep_edges == ()
 
 
+def test_added_trailing_param_with_default_is_compatible() -> None:
+    """Existing callers omitting the new param still work — no conflict."""
+    base = symbol("m::f", sl=2, signature=sig((param("a", 0),), "int"))
+    head = symbol(
+        "m::f", sl=2,
+        signature=sig((param("a", 0), param("b", 1, has_default=True)), "int"),
+    )
+    cs = _cs((base,), (head,), (base,))
+    assert cs.provides_delta_a == ()
+
+
+def test_added_trailing_required_param_still_fires() -> None:
+    """Same shape, but the new param has NO default — existing callers break."""
+    base = symbol("m::f", sl=2, signature=sig((param("a", 0),), "int"))
+    head = symbol(
+        "m::f", sl=2,
+        signature=sig((param("a", 0), param("b", 1, has_default=False)), "int"),
+    )
+    cs = _cs((base,), (head,), (base,))
+    assert [c.kind for c in cs.provides_delta_a] == ["signature_changed"]
+    assert "added 'b'" in cs.provides_delta_a[0].detail
+
+
+@pytest.mark.parametrize(
+    "old_type,new_type",
+    [("str", "str | None"), ("str", "None | str"), ("str", "Optional[str]")],
+)
+def test_param_type_widened_to_optional_is_compatible(old_type, new_type) -> None:
+    """Callers passing the old type still satisfy the widened annotation."""
+    base = symbol("m::f", sl=2, signature=sig((param("a", 0, old_type),), "int"))
+    head = symbol("m::f", sl=2, signature=sig((param("a", 0, new_type),), "int"))
+    cs = _cs((base,), (head,), (base,))
+    assert cs.provides_delta_a == ()
+
+
+def test_param_type_narrowed_from_optional_still_fires() -> None:
+    """The reverse direction (None -> str) is a real breaking narrowing."""
+    base = symbol("m::f", sl=2, signature=sig((param("a", 0, "str | None"),), "int"))
+    head = symbol("m::f", sl=2, signature=sig((param("a", 0, "str"),), "int"))
+    cs = _cs((base,), (head,), (base,))
+    assert [c.kind for c in cs.provides_delta_a] == ["signature_changed"]
+
+
+def test_widened_param_alongside_a_real_change_still_fires_for_the_real_one() -> None:
+    """A compatible widening at one position must not mask a real break at
+    another position in the same signature."""
+    base = symbol(
+        "m::f", sl=2,
+        signature=sig((param("a", 0, "str"), param("b", 1, "int")), "int"),
+    )
+    head = symbol(
+        "m::f", sl=2,
+        signature=sig(
+            (param("a", 0, "str | None"), param("b", 1, "bytes")), "int"
+        ),
+    )
+    cs = _cs((base,), (head,), (base,))
+    assert [c.kind for c in cs.provides_delta_a] == ["signature_changed"]
+    detail = cs.provides_delta_a[0].detail
+    assert "position 1" in detail
+    assert "position 0" not in detail  # the compatible widening is silent
+
+
 def test_refs_are_kept_on_graphs() -> None:
     from semlock.engine.changeset import ChangeSet as _  # noqa: F401
 
@@ -136,3 +200,101 @@ def test_refs_are_kept_on_graphs() -> None:
     cs = build_changeset(base_files, base_files, base_files)
     assert len(cs.b_graph.dep_edges) == 1
     assert cs.b_graph.eligible_deps()[0].target_id == "m::f"
+
+
+# --- inherited-file filter (real-world kill-test finding) -----------------
+#
+# Provider (A) changes m::greet. Consumer (B)'s facts for the file the
+# dependency edge lives in still show the OLD form — either because B
+# genuinely never touched that file (inherited unchanged from the
+# merge-base; post-merge git takes A's whole self-consistent file, so this
+# is not a real break) or because B independently edited it (a real
+# conflict, whether same-file-different-region or ordinary cross-file).
+# Telling these apart needs BOTH sides' git-diff-changed paths — a lone
+# consumer-side signal isn't enough: if the provider ALSO never touched that
+# file, it's genuinely untouched by both sides (the ordinary, most basic
+# conflict shape) and must never be excluded. Omitting either side's set
+# (None) preserves pre-existing, unfiltered behavior for callers with no
+# git context (mocks, fixtures).
+
+
+def _consumer_ref_case(
+    consumer_path: str,
+    changed_paths_a: frozenset[str] | None,
+    changed_paths_b: frozenset[str] | None,
+):
+    old = symbol("m::greet", sl=2, signature=sig((param("name", 0, "str"),), "str"))
+    new = symbol(
+        "m::greet", sl=2, signature=sig((param("greeting", 0, "str"),), "str")
+    )
+    base_files = (facts("pkg/models.py", symbols=(old,)),)
+    a_files = (facts("pkg/models.py", symbols=(new,)),)
+    b_files = (
+        facts(
+            consumer_path,
+            symbols=(old,) if consumer_path == "pkg/models.py" else (),
+            refs=(ref("greet", target="m::greet", sl=9),),
+        ),
+    )
+    cs = build_changeset(
+        base_files, a_files, b_files,
+        changed_paths_a=changed_paths_a, changed_paths_b=changed_paths_b,
+    )
+    return evaluate(cs)
+
+
+def test_ref_fires_when_no_git_context_given() -> None:
+    """Either side's changed_paths missing: no filtering, matches
+    pre-existing behavior."""
+    result = _consumer_ref_case("pkg/models.py", None, None)
+    assert len(result.conflicts) == 1
+    assert result.stats.deps_same_file_inherited == 0
+
+
+def test_ref_silenced_when_consumer_never_touched_provider_touched_file() -> None:
+    """B's git diff doesn't include pkg/models.py, but A's does: it's an
+    inherited, stale copy — post-merge the file is entirely A's
+    (self-consistent) version."""
+    result = _consumer_ref_case(
+        "pkg/models.py",
+        frozenset({"pkg/models.py"}), frozenset({"pkg/other.py"}),
+    )
+    assert result.conflicts == ()
+    assert result.stats.deps_same_file_inherited == 1
+
+
+def test_ref_still_fires_when_consumer_also_touched_that_file() -> None:
+    """B's git diff DOES include pkg/models.py too: a genuine same-file,
+    different-region conflict — must still fire."""
+    result = _consumer_ref_case(
+        "pkg/models.py",
+        frozenset({"pkg/models.py"}), frozenset({"pkg/models.py"}),
+    )
+    assert len(result.conflicts) == 1
+    assert result.stats.deps_same_file_inherited == 0
+
+
+def test_ref_fires_when_untouched_by_both_sides() -> None:
+    """Neither side's git diff includes the consumer's file (the ordinary,
+    most basic conflict shape: an unrelated file quietly depends on what
+    just changed) — never excluded, even with full git context."""
+    result = _consumer_ref_case(
+        "pkg/app.py",
+        frozenset({"pkg/models.py"}), frozenset(),
+    )
+    assert len(result.conflicts) == 1
+    assert result.stats.deps_same_file_inherited == 0
+
+
+def test_cross_file_ref_silenced_when_provider_also_touched_it() -> None:
+    """Real kill-test case (pydantic#12147 x #12333): the symbol is DEFINED
+    in one file but the provider's OWN PR also edits a DIFFERENT file where
+    it's consumed (its own internal caller). Consumer (B) never touches that
+    second file either. Post-merge it's entirely the provider's version —
+    excluded exactly like the same-file case, not just when paths match."""
+    result = _consumer_ref_case(
+        "pkg/app.py",
+        frozenset({"pkg/models.py", "pkg/app.py"}), frozenset(),
+    )
+    assert result.conflicts == ()
+    assert result.stats.deps_same_file_inherited == 1

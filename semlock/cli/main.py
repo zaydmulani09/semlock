@@ -80,7 +80,21 @@ def _import_optional(module_name: str) -> tuple[Any | None, str]:
         return None, f"importing {module_name} failed: {exc}"
 
 
-def _run_real_pipeline(repo: Path, ref_a: str, ref_b: str) -> tuple[Finding, ...]:
+def _resolution_stats(files: tuple[Any, ...]) -> dict[str, Any]:
+    """Resolution coverage (Constitution §4): language-agnostic, reads only
+    the IR's Resolution.status — every language stamps the same shape."""
+    counts = {"resolved": 0, "external": 0, "ambiguous": 0, "unresolved": 0}
+    for facts in files:
+        for ref in facts.refs:
+            counts[ref.resolution.status] += 1
+    total = sum(counts.values())
+    coverage = counts["resolved"] / total if total else 0.0
+    return {"total": total, "coverage": round(coverage, 4), **counts}
+
+
+def _run_real_pipeline(
+    repo: Path, ref_a: str, ref_b: str
+) -> tuple[tuple[Finding, ...], dict[str, Any]]:
     """git -> extract -> resolve -> graph -> engine, via the frozen seams.
 
     Stage availability is detected at runtime; missing stages raise
@@ -88,8 +102,16 @@ def _run_real_pipeline(repo: Path, ref_a: str, ref_b: str) -> tuple[Finding, ...
     extractors/resolvers and S4's package lands, this lights up without CLI
     changes (signatures consumed: engine.build_changeset(base, a, b),
     engine.evaluate(changeset) -> result with .conflicts).
+
+    Returns (findings, engine_stats); engine_stats carries first-class
+    resolution coverage over every ref collected for this run (base+A+B).
     """
     three = extract_at_ref.collect_three_way(repo, ref_a, ref_b)
+    stats = {
+        "resolution": _resolution_stats(
+            three.side_base + three.side_a + three.side_b
+        )
+    }
 
     engine_mod, why = _import_optional("semlock.engine")
     if engine_mod is None:
@@ -105,12 +127,23 @@ def _run_real_pipeline(repo: Path, ref_a: str, ref_b: str) -> tuple[Finding, ...
             "+ evaluate(changeset); expected API filed via interface-request"
         )
 
-    changeset = build_changeset(three.side_base, three.side_a, three.side_b)
+    changeset = build_changeset(
+        three.side_base,
+        three.side_a,
+        three.side_b,
+        changed_paths_a=frozenset(three.changed_paths_a),
+        changed_paths_b=frozenset(three.changed_paths_b),
+    )
     result = evaluate(changeset)
     conflicts = getattr(result, "conflicts", None)
     if conflicts is None:
         raise _EngineUnavailable("engine returned no .conflicts attribute")
-    return tuple(findings_mod.from_engine(c) for c in conflicts)
+    to_dict = getattr(result, "to_dict", None)
+    if callable(to_dict):
+        eval_stats = to_dict().get("stats")
+        if isinstance(eval_stats, dict):
+            stats["evaluation"] = eval_stats
+    return tuple(findings_mod.from_engine(c) for c in conflicts), stats
 
 
 def _run_graph_export(
@@ -180,7 +213,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
         findings = mock_pipeline.scenario_findings(scenario)
     else:
         try:
-            findings = _run_real_pipeline(repo, args.ref_a, args.ref_b)
+            findings, engine_stats = _run_real_pipeline(repo, args.ref_a, args.ref_b)
         except (
             _EngineUnavailable,
             extract_at_ref.PipelineUnavailableError,
