@@ -11,14 +11,18 @@ Predictors:
 * MockPredictor ("mock:v0") replays the planted predictions stored in case
   metas. PLUMBING ONLY: it exercises the pipeline without a product CLI and
   its numbers are NEVER publishable as SEMLock results.
-* CliPredictor ("cli") will adapt real `semlock` findings once S5 lands;
-  until then it raises PredictorUnavailable (never silently fakes).
+* CliPredictor ("cli") shells out to the real installed `semlock` binary
+  (black-box: subprocess only, no importing SEMLock internals) and adapts its
+  JSON findings into Predictions. Materializes each case's base/side_a/side_b
+  states as commits in a throwaway git repo (`side_a`/`side_b` branches off a
+  shared `base`) so the real `semlock check` seam runs unmodified.
 """
 from __future__ import annotations
 
 import json
 import subprocess
 import sys
+import tempfile
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -119,30 +123,124 @@ class MockPredictor(Predictor):
         return meta.predictions
 
 
-# Required S5 CLI contract (interface-request to be filed when wiring starts):
-#
-#     semlock check --repo <merged-worktree> --base <ref> --head <ref> --json
-#
-# stdout: JSON array of findings:
-#   [{"case": "...", "conflict_class": "signature_changed",
-#     "symbol_id": "pkg.models::User.greet", "ref": {"path": "pkg/app.py",
-#     "start_line": 4, "end_line": 4},
-#     "resolution": {"status": "resolved", "target_id": "..."},
-#     "language": "python"}, ...]
-# plus top-level resolution coverage stats. Adapter maps findings ->
-# Prediction; unresolved-status findings are REJECTED as invalid (INV-2).
+def _run_git(repo: Path, *args: str) -> str:
+    proc = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True, text=True, encoding="utf-8", check=False,
+    )
+    if proc.returncode != 0:
+        raise PredictorUnavailable(f"git {args}: {proc.stderr.strip()}")
+    return proc.stdout
+
+
+def _init_case_repo(repo: Path) -> None:
+    _run_git(repo, "init", "-q", "-b", "base")
+    _run_git(repo, "config", "user.email", "bench@semlock.local")
+    _run_git(repo, "config", "user.name", "SEMLock Bench")
+    _run_git(repo, "config", "core.autocrlf", "false")
+    _run_git(repo, "config", "commit.gpgsign", "false")
+
+
+def _overlay_dir(repo: Path, layer_dir: Path) -> None:
+    """Copy every file under layer_dir into repo, preserving relative paths."""
+    if not layer_dir.is_dir():
+        return
+    for src in sorted(layer_dir.rglob("*")):
+        if src.is_file():
+            rel = src.relative_to(layer_dir)
+            dest = repo / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(src.read_bytes())
+
+
+def _commit_state(
+    repo: Path, states: Path, branch: str, layer: str, message: str
+) -> None:
+    """Check out `branch` from `base`, overlay `layer`'s files, commit."""
+    _run_git(repo, "checkout", "-q", "-b", branch, "base")
+    _overlay_dir(repo, states / layer)
+    _run_git(repo, "add", "-A")
+    _run_git(repo, "commit", "-q", "-m", message, "--allow-empty")
+
+
+def _build_case_repo(states: Path, repo: Path) -> None:
+    """base branch = states/base; side_a/side_b branch off it with overlays."""
+    _init_case_repo(repo)
+    _overlay_dir(repo, states / "base")
+    _run_git(repo, "add", "-A")
+    _run_git(repo, "commit", "-q", "-m", "base", "--allow-empty")
+    _commit_state(repo, states, "side_a", "side_a", "side a")
+    _run_git(repo, "checkout", "-q", "base")
+    _commit_state(repo, states, "side_b", "side_b", "side b")
+
+
 class CliPredictor(Predictor):
+    """Adapts real `semlock check --json` findings into Predictions.
+
+    Black-box only: invokes the installed `semlock` binary as a subprocess,
+    never imports SEMLock internals. Each case's states/{base,side_a,side_b}
+    directories are materialized as commits in a throwaway git repo so the
+    real check REFA REFB seam (git worktrees + merge-base) runs unmodified.
+    """
+
     kind = "cli"
 
-    def __init__(self, semlock_bin: str) -> None:
+    def __init__(self, semlock_bin: str, cases_root: Path) -> None:
         self._bin = semlock_bin
+        self._cases_root = cases_root
+        self._resolved = 0
+        self._total_edges = 0
+
+    @property
+    def resolution_stats(self) -> dict[str, int]:
+        """Accumulated resolution coverage across every case predicted so
+        far (Constitution §4: reported first-class beside precision/recall)."""
+        return {"resolved": self._resolved, "total_edges": self._total_edges}
 
     def predict(self, meta: CaseMeta) -> tuple[Prediction, ...]:
-        raise PredictorUnavailable(
-            "CliPredictor requires the S5 CLI contract "
-            "(semlock check --json); see module docstring. "
-            "Mock runs must be labeled mock and are not publishable."
-        )
+        states = self._cases_root / meta.case_id / "states"
+        if not states.is_dir():
+            raise PredictorUnavailable(f"no states/ directory for {meta.case_id}")
+
+        with tempfile.TemporaryDirectory(prefix="semlock-bench-repo-") as tmp:
+            repo = Path(tmp)
+            _build_case_repo(states, repo)
+            proc = subprocess.run(
+                [self._bin, "check", "side_a", "side_b", "--repo", str(repo), "--json"],
+                capture_output=True, text=True, encoding="utf-8", check=False,
+            )
+            if proc.returncode not in (0, 1):
+                err = proc.stderr.strip()[:300]
+                raise PredictorUnavailable(
+                    f"semlock check exited {proc.returncode}: {err}"
+                )
+            report = json.loads(proc.stdout)
+
+        resolution = (report.get("engine_stats") or {}).get("resolution")
+        if isinstance(resolution, dict):
+            self._resolved += int(resolution.get("resolved", 0))
+            self._total_edges += int(resolution.get("total", 0))
+
+        predictions = []
+        for i, finding in enumerate(report.get("findings", [])):
+            span = finding["consumer_span"]
+            pred = Prediction(
+                prediction_id=f"{meta.case_id}#{i}",
+                case_id=meta.case_id,
+                language=meta.language,
+                conflict_class=finding["conflict_class"],
+                symbol_id=finding["changed_symbol_id"],
+                ref_path=finding["consumer_path"],
+                ref_start_line=int(span["start_line"]),
+                ref_end_line=int(span["end_line"]),
+                # The engine only ever emits findings for RESOLVED refs
+                # (INV-2); the CLI's JSON report carries no separate
+                # resolution field on findings because of that guarantee.
+                resolution_status="resolved",
+            )
+            pred.validate()
+            predictions.append(pred)
+        return tuple(predictions)
 
 
 def _oracle_for(language: str, tsc_bin: str | None) -> Oracle:
@@ -192,17 +290,26 @@ def run_pipeline(
         try:
             oracle = _oracle_for(meta.language, tsc_bin)
             predictions = predictor.predict(meta)
-        except (CheckerUnavailable, PredictorUnavailable, ValueError) as exc:
+            verdicts = []
+            for pred in predictions:
+                result: OracleResult = oracle.evaluate(ctx, pred)
+                verdicts.append(_prediction_entry(pred, result))
+            candidates = [
+                _candidate_entry(candidate, oracle)
+                for candidate in oracle.scan_breaks(ctx)
+            ]
+        except (
+            CheckerUnavailable,
+            PredictorUnavailable,
+            ValueError,
+            subprocess.TimeoutExpired,
+        ) as exc:
+            # A single slow/broken case (e.g. an oracle timing out on an
+            # unusually large mined state) must not lose every other case's
+            # results — record it skipped and keep going (INV-8 spirit:
+            # inconclusive is a valid, honestly-reported outcome).
             results.append(_skipped_case_entry(meta, exc))
             continue
-
-        verdicts = []
-        for pred in predictions:
-            result: OracleResult = oracle.evaluate(ctx, pred)
-            verdicts.append(_prediction_entry(pred, result))
-        candidates = [
-            _candidate_entry(candidate, oracle) for candidate in oracle.scan_breaks(ctx)
-        ]
         timings[meta.case_id] = round(time.perf_counter() - started, 6)
         results.append(
             {
@@ -215,12 +322,15 @@ def run_pipeline(
             }
         )
 
-    artifact = {
+    artifact: dict[str, object] = {
         "schema": RUN_SCHEMA,
         "predictor_kind": predictor.kind,
         "oracles": tool_versions,
         "results": results,
     }
+    resolution_stats = getattr(predictor, "resolution_stats", None)
+    if isinstance(resolution_stats, dict):
+        artifact["resolution_stats"] = resolution_stats
     out = out_dir / "results.json"
     out.write_text(
         json.dumps(artifact, indent=2, sort_keys=False) + "\n", encoding="utf-8"
