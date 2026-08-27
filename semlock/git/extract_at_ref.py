@@ -183,6 +183,8 @@ class ThreeWayFacts:
     base_sha: str
     files_a: int
     files_b: int
+    changed_paths_a: tuple[str, ...]
+    changed_paths_b: tuple[str, ...]
     side_base: tuple[FileFacts, ...]
     side_a: tuple[FileFacts, ...]
     side_b: tuple[FileFacts, ...]
@@ -198,8 +200,8 @@ def collect_three_way(
     sha_a = refs.resolve_ref(repo, ref_a)
     sha_b = refs.resolve_ref(repo, ref_b)
     base_sha = refs.merge_base(repo, sha_a, sha_b)
-    files_a = len(refs.changed_files(repo, base_sha, sha_a))
-    files_b = len(refs.changed_files(repo, base_sha, sha_b))
+    changed_paths_a = refs.changed_files(repo, base_sha, sha_a)
+    changed_paths_b = refs.changed_files(repo, base_sha, sha_b)
     side_base = collect_side(
         repo, f"{base_sha} (merge-base)", base_sha, base_sha, languages
     )
@@ -211,8 +213,10 @@ def collect_three_way(
         sha_a=sha_a,
         sha_b=sha_b,
         base_sha=base_sha,
-        files_a=files_a,
-        files_b=files_b,
+        files_a=len(changed_paths_a),
+        files_b=len(changed_paths_b),
+        changed_paths_a=changed_paths_a,
+        changed_paths_b=changed_paths_b,
         side_base=side_base,
         side_a=side_a,
         side_b=side_b,
