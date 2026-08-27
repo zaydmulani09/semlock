@@ -157,3 +157,26 @@ Append one line per merge (cross-session rule 17): what landed, what's consumabl
   CLI seam documented), bench/label + corpus/labels schema, bench/report with
   publishability gate, determinism tests byte-identical, repos.yaml + miner
   scaffold. Consumable: python -m bench.run_benchmark --workdir <dir>.
+- 2026-08-27 S1 (sole engineer, finishing plan step 5 — THE KILL-TEST):
+  landed S2/S3/S6 (PRs #16/#18/#20) plus two S1-arbitrated infra fixes
+  (#15 registry bootstrap, #17 tree-sitter core pin — 0.23.x only, a
+  segfault fix). Pipeline complete on main; verified end-to-end with a
+  real two-branch repo (signature_changed, dual-sided evidence, JSON
+  byte-identical reruns). Finished bench/mine.py's crawler (was
+  scaffold) and ran it for real against 10 GitHub repos; wired
+  CliPredictor to the installed `semlock` binary. Kill-test found and
+  fixed two real engine precision bugs (compatible signature widening;
+  same-file/inherited-file dependency misattribution — the dominant
+  real-code FP source) and two bench-harness bugs (miner materializing
+  confounded history; naive same-file overlay not matching a real git
+  merge) — all landed as PR #21. Final numbers: synthetic+adversarial
+  precision 0.75 / recall 1.0 (up from an initial 0.57/1.0 before the
+  engine fixes); real 10-repo mined corpus 0 false positives (down from
+  405 across the fix iterations). Separately investigated real-world
+  RECALL (a labeled corpus of historical concurrent-PR breaks): 0/26
+  candidates confirmed against 7 repos via two independent search
+  strategies — every candidate traced to the provider's own
+  pre-existing issue or a benchmark-harness artifact, both documented
+  with evidence in tests/fixtures/real/. Consumable: bench/real_recall/
+  verify_candidate.py (reusable A-alone + real-merge falsification
+  tests) for a future wider-pool recall search.
